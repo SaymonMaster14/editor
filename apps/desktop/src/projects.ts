@@ -325,9 +325,13 @@ export async function cloudSyncKind(path: string): Promise<string | null> {
       const dir = process.env[key];
       if (dir) roots.push([dir, "OneDrive"]);
     }
+    // Both sides canonicalized: sync roots arrive from the environment, which
+    // on usernames with spaces often spells them with 8.3 short names while
+    // `real` is the realpath long form, so a lexical compare would miss.
+    const low = real.toLowerCase();
     for (const [dir, label] of roots) {
-      const root = resolve(dir);
-      if (real === root || real.startsWith(root + sep)) return label;
+      const root = (await resolveDeepest(dir)).toLowerCase();
+      if (low === root || low.startsWith(root + sep)) return label;
     }
   }
 
