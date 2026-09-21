@@ -44,7 +44,9 @@ writeFileSync(
   JSON.stringify({ name: "desktop-runtime", private: true, dependencies }, null, 2),
 );
 
-execFileSync("npm", ["install", "--omit=dev", "--no-audit", "--no-fund", "--no-package-lock"], {
+// On Windows npm is a .cmd shim, which execFileSync cannot launch directly.
+const npmExec = process.platform === "win32" ? "npm.cmd" : "npm";
+execFileSync(npmExec, ["install", "--omit=dev", "--no-audit", "--no-fund", "--no-package-lock"], {
   cwd: stageDir,
   stdio: "inherit",
 });

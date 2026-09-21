@@ -4,6 +4,7 @@
 
 import type { ForgeConfig } from '@electron-forge/shared-types';
 import { MakerDMG } from '@electron-forge/maker-dmg';
+import { MakerSquirrel } from '@electron-forge/maker-squirrel';
 import { MakerZIP } from '@electron-forge/maker-zip';
 import { PublisherGithub } from '@electron-forge/publisher-github';
 import { readFileSync } from 'node:fs';
@@ -41,6 +42,17 @@ const config: ForgeConfig = {
         : undefined,
   },
   makers: [
+    new MakerSquirrel(
+      {
+        name: 'Diffusion Studio',
+        authors: 'Diffusion Studio',
+        description: 'Agentic video editing',
+        setupIcon: './assets/icon.ico',
+        // No iconUrl: the installer stays fully offline and shortcuts take
+        // the exe icon stamped from packagerConfig.icon (icon.ico on win32).
+      },
+      ['win32'],
+    ),
     new MakerZIP({}, ['darwin']),
     new MakerDMG({
       name: `Diffusion-Studio-${process.arch}`,

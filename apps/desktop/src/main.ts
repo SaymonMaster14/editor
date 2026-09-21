@@ -57,6 +57,14 @@ const MACOS_CORNER_RADIUS = 18;
 const MACOS_BACKDROP = { blur: 80, red: 0.07, green: 0.07, blue: 0.07, alpha: 0.9 };
 
 app.setName("Diffusion Studio");
+if (process.platform === "win32") {
+  app.setAppUserModelId("studio.diffusion.editor");
+}
+
+// Squirrel.Windows install/update/uninstall events arrive as --squirrel-*
+// flags on a short-lived launch; handling them is what creates the Start menu
+// shortcuts and registers the uninstaller. Must run before the app is ready.
+if (process.platform === "win32" && require("electron-squirrel-startup")) app.quit();
 app.commandLine.appendSwitch("enable-blink-features", "CanvasDrawElement");
 app.commandLine.appendSwitch("enable-features", "SharedArrayBuffer");
 app.commandLine.appendSwitch("disable-background-timer-throttling");
