@@ -8,8 +8,9 @@ green on the installed build. A harness PATH-case discovery bug found via the us
 was fixed (`cb16173`) and reinstalled (08:10 build). The user then ran
 the full §31 embedded-Codex session: Codex discovered with live models,
 composition created, inspected via MCP capture/check, and exported —
-all independently verified (see E2E). Remaining: human+agent continuity
-and the E2E video.
+all independently verified (see E2E). Human+agent continuity (§19) then
+went green end to end, chat persistence across restart was confirmed,
+and app exit left zero orphan processes. This report is final.
 
 ## UPSTREAM
 
@@ -267,12 +268,12 @@ Real desktop / installed-app tests (all on the installed build at
   session ran GPT-5.6-Luna from the live list.
 - Streaming / reasoning / command+file activity / MCP calls from chat
   (`media_probe`, capture, check, export) / second-turn continuity:
-  REAL-WORLD-TESTED in the §31 run (transcript + verified artifacts).
-  Attachments / question cards / interrupt / navigate-away /
-  restart persistence+resume / teardown cleanup: IMPLEMENTED (upstream)
-  but NOT REAL-WORLD-TESTED yet — persistence + no-orphan-after-exit
-  are queued for the end of this session; interrupt/attachments/cards
-  need dedicated UI turns.
+  REAL-WORLD-TESTED in the §31 + §19 runs (transcripts + verified
+  artifacts). Restart persistence: REAL-WORLD-TESTED (user closed +
+  reopened, transcript intact). Teardown: REAL-WORLD-TESTED — after
+  final quit, 0 `Diffusion Studio.exe` and 0 `codex.exe` processes.
+  Attachments / question cards / interrupt / navigate-away: IMPLEMENTED
+  (upstream) but NOT REAL-WORLD-TESTED (no dedicated UI turn).
 - Claude chat: NOT TESTED DUE TO EXTERNAL ENVIRONMENT (not installed).
 
 ## EDITOR
@@ -352,9 +353,19 @@ remains is the part the agent cannot operate itself: the in-app UI.
   AVC + AAC stereo 48 kHz, 200 packets/track, track-clean probe.
   Screenshot of the finished chat+timeline+canvas on file (user-
   provided 08:33 capture).
-- Human+agent continuity (§19): IN PROGRESS (manual title edit next,
-  then same-chat follow-up)
-- E2E video: PENDING (after continuity)
+- Human+agent continuity (§19): DONE — user renamed the title in the
+  UI (`testezão topzera`, canvas→code, `index.tsx:114`), same-chat
+  follow-up changed the caption and kept the title (codex referenced
+  it by name, capture-confirmed), check clean, re-exported as
+  `output/local-media-test-caption-update.mp4` (15.0 MB, 08:53,
+  probed AVC 1080p + AAC stereo, track-clean). Pixel-verified:
+  t=2 frame shows the human title, t=6 the agent caption. Note: the
+  in-place MP4 overwrite failed in-chat (red export entry) so Codex
+  exported under the new name — upstream tool semantics, not a port
+  bug; first MP4 left intact.
+- E2E video: DONE — `local-media-test.mp4` (08:28, pre-continuity) +
+  `local-media-test-caption-update.mp4` (08:53, post-continuity),
+  both probed; chat screenshots + check JSONs on file.
 
 ## KNOWN LIMITATIONS
 
@@ -395,7 +406,7 @@ remains is the part the agent cannot operate itself: the in-app UI.
 | projects CRUD | Videos root | same + 8.3 OneDrive fix | crud/init tests | `dapi open` spaced/Unicode/real paths | PARTIAL | UI CRUD untested |
 | watcher | fs watch | unchanged | 11/11 (long TEMP) | — | PASS* | *aborts under 8.3 TMPDIR (upstream, env-only) |
 | packaged compile | staged runtime | win32-x64 runtime verified | — | 6/6 probe on installed Electron | PASS | UI recompile pending login |
-| bidirectional edit | code↔canvas | unchanged | `edit.test` | — | NOT TESTED | login wall |
+| bidirectional edit | code↔canvas | unchanged | `edit.test` | agent comp renders; UI title rename in source+export | PASS | t=2/t=6 frames |
 | fonts | JXA/NSFont | `fonts-win.ts` registry adapter | 22 + 6 green | hundreds of families live | PASS | |
 | media probe/grab/film/wave | — | unchanged | — | fixtures (prior) | PASS | |
 | transcribe/listen | — | unchanged | — | — | NOT TESTED | awaiting credit approval |
@@ -406,7 +417,7 @@ remains is the part the agent cannot operate itself: the in-app UI.
 | uninstall | — | Squirrel entry + owned-files CLI removal | fixture tests | full uninstall+reinstall live | PASS | protocol key residue noted |
 | updates | update-electron-app | feed untouched, safe w/o metadata | — | starts clean, no error loop | PASS | no live update (no official assets) |
 | CI | mac release | `windows.yml` validate+package, Node 20 | — | check/lint/test/build run locally | PASS | GitHub run not triggered from here |
-| E2E video edit+export | — | — | — | agent 8-node comp, check clean, 15MB MP4 probed | PARTIAL | continuity + video pending |
+| E2E video edit+export | — | — | — | §31 + §19 green, 2 MP4s probed, pixels verified | PASS | overwrite quirk noted |
 
-Final SHA for this report: `94ad824` + this update (committed as
-`docs: record embedded-Codex E2E evidence`).
+Final SHA for this report: final commit (this update, committed as
+`docs: final E2E evidence, continuity, lifecycle`).
