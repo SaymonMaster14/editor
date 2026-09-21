@@ -11,7 +11,7 @@ import { app } from "electron";
 import { execFile } from "node:child_process";
 import { existsSync, lstatSync, unlinkSync } from "node:fs";
 import { join } from "node:path";
-import { realWinCliEnv, winCliStatus, winInstallCli, winUninstallCli } from "./cli-install-win";
+import { realWinCliEnv, winCliNeedsRepair, winCliStatus, winInstallCli, winUninstallCli } from "./cli-install-win";
 
 import type { CliInstallResult, CliStatus, CliUninstallResult } from "./main-channels";
 
@@ -80,6 +80,26 @@ export async function installCli(): Promise<CliInstallResult> {
  * to delete. The plain unlink covers Homebrew's user-owned bin; when the
  * folder refuses (/usr/local/bin is root's), the admin prompt takes over.
  */
+/**
+ * Startup self-heal (Windows, packaged only): after a Squirrel reinstall
+ * wipes the launcher files, recreate them when the surviving PATH entry
+ * proves the user had installed. Never throws: a broken repair must not
+ * break app startup.
+ */
+export function healCliInstall(): void {
+  if (process.platform !== "win32" || !app.isPackaged) return;
+  try {
+    const env = realWinCliEnv(app.isPackaged, process.resourcesPath);
+    if (!winCliNeedsRepair(env)) return;
+    const result = winInstallCli(env);
+    if (result.status !== "installed") {
+      console.warn(`[cli] launcher repair: ${result.status}${"error" in result ? ` (${result.error})` : ""}`);
+    }
+  } catch (e) {
+    console.warn(`[cli] launcher repair skipped: ${(e as Error).message}`);
+  }
+}
+
 export async function uninstallCli(): Promise<CliUninstallResult> {
   if (process.platform === "win32") return winUninstallCli(realWinCliEnv(app.isPackaged, process.resourcesPath));
   const path = installedPath();

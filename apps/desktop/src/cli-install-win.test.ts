@@ -7,7 +7,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, test } from "vitest";
-import { SHIM_SIGNATURE, winInstallCli, winUninstallCli, type WinCliEnv } from "./cli-install-win";
+import { SHIM_SIGNATURE, winCliNeedsRepair, winInstallCli, winUninstallCli, type WinCliEnv } from "./cli-install-win";
 
 const testDir = dirname(fileURLToPath(import.meta.url));
 const PAYLOAD = join(testDir, "..", "staged-cli");
@@ -156,5 +156,32 @@ describe("winUninstallCli", () => {
     expect(winInstallCli(clean)).toEqual({ status: "installed" });
     expect(winUninstallCli(clean)).toEqual({ status: "removed" });
     expect(() => readdirSync(clean.binDir)).toThrow();
+  });
+});
+
+describe("winCliNeedsRepair", () => {
+  test("repairs a Squirrel-style wipe: files gone, PATH entry surviving", () => {
+    const env = fake();
+    expect(winInstallCli(env)).toEqual({ status: "installed" });
+    expect(winCliNeedsRepair(env)).toBe(false);
+    // The reinstall wipes the dir; the registry PATH entry survives.
+    rmSync(env.binDir, { recursive: true, force: true });
+    expect(env.userPath).toContain(env.binDir);
+    expect(winCliNeedsRepair(env)).toBe(true);
+    env.found = [];
+    expect(winInstallCli(env)).toEqual({ status: "installed" });
+    expect(readFileSync(env.shim, "utf8")).toContain(SHIM_SIGNATURE);
+    expect(winCliNeedsRepair(env)).toBe(false);
+  });
+
+  test("stays quiet when never installed, uninstalled, or in dev", () => {
+    expect(winCliNeedsRepair(fake())).toBe(false);
+    const env = fake({ isPackaged: false });
+    env.userPath = `C:\\other\\bin;${env.binDir}`;
+    expect(winCliNeedsRepair(env)).toBe(false);
+    const removed = fake();
+    expect(winInstallCli(removed)).toEqual({ status: "installed" });
+    expect(winUninstallCli(removed)).toEqual({ status: "removed" });
+    expect(winCliNeedsRepair(removed)).toBe(false);
   });
 });

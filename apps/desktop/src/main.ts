@@ -12,7 +12,7 @@ import { updateElectronApp } from "update-electron-app";
 import { tempPathFor } from "./atomic";
 import { DapiServer } from "./dapi/server";
 import { agentChatEndpoint, deleteProjectChats, startAgentChat, stopAgentChat } from "./agent-chat";
-import { cliStatus, installCli, uninstallCli } from "./cli-install";
+import { cliStatus, healCliInstall, installCli, uninstallCli } from "./cli-install";
 import { applyMcp, healMcpRegistrations, mcpStatus } from "./mcp-install";
 import { enableHeadless } from "./headless";
 import { trackEvent, trackInstall } from "./analytics";
@@ -408,6 +408,7 @@ if (app.requestSingleInstanceLock()) {
       }),
     );
     healMcpRegistrations();
+    healCliInstall();
     trackInstall();
     createWindow(!isHiddenLaunch(process.argv));
   });

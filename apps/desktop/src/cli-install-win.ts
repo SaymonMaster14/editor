@@ -71,6 +71,19 @@ export function winCliStatus(env: WinCliEnv): CliStatus {
   return { installed: false, path: null, managed: false, available: env.isPackaged };
 }
 
+/**
+ * Whether a previous install lost its launcher files. A Squirrel
+ * same-version reinstall wipes unrecognized dirs under the install root,
+ * which removes our `bin` while the user-PATH entry — our proof the user
+ * opted in — survives. Repair only recreates files we own.
+ */
+export function winCliNeedsRepair(env: WinCliEnv): boolean {
+  if (!env.isPackaged || winCliStatus(env).installed) return false;
+  const binDir = stableBinDir(rootForResources(env.resourcesPath));
+  const userPath = env.readUserPath();
+  return userPath !== null && pathHasEntry(userPath, binDir);
+}
+
 export function winInstallCli(env: WinCliEnv): CliInstallResult {
   if (!env.isPackaged) {
     return {
