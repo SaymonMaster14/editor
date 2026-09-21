@@ -1,0 +1,55 @@
+name: Windows
+
+on:
+  push:
+    branches: ["main", "feat/windows-parity"]
+  pull_request:
+
+jobs:
+  validate:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+
+      - name: Provide client env for web build
+        run: cp apps/web/.env.example apps/web/.env
+
+      - run: npm run check
+      - run: npm run lint
+      - run: npm run test
+      - run: npm run build:desktop
+
+  package:
+    needs: validate
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+
+      - name: Provide client env for web build
+        run: cp apps/web/.env.example apps/web/.env
+
+      # Unsigned local-style build: no certificates, no publish. Fails the job
+      # when the Squirrel installer stops building.
+      - name: Build Windows installer
+        run: npm run make --workspace=@diffusionstudio/desktop
+
+      - name: Upload installer artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: diffusion-studio-windows-setup
+          path: apps/desktop/out/make/squirrel.windows/x64/*Setup.exe
+          if-no-files-found: error
