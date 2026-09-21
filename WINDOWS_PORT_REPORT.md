@@ -168,6 +168,15 @@ Real desktop / installed-app tests (all on the installed build at
   removed after): binary resolved, `ready`, version 0.155.0, default
   `gpt-5.6-sol`, 5 live models (not the 2-item static fallback), no
   `codex` processes left behind. No credentials printed.
+- Live Codex MCP user-config cycle via the real `applyMcp`/`mcpStatus`
+  (throwaway test, removed after; backup at
+  `%TEMP%\codex-config-backup.toml`): initial state detected+connected
+  (12 `mcp_servers` tables, 26350 bytes); disconnect removed only our
+  table (11 left, `connected=false`); connect restored it with the
+  loopback URL (12 tables, `connected=true`); a second
+  disconnect/connect cycle behaved identically; the file was restored
+  byte-exact (sha prefix `bb3248771b1ebded` before and after, `fc /b`
+  clean). Only booleans/counts/hashes were printed — never contents.
 
 ## EMBEDDED CHAT
 
@@ -214,6 +223,11 @@ Real desktop / installed-app tests (all on the installed build at
   preserves data across reinstall, serves DAPI, handles `diffusion://`.
   Unsigned build: Windows SmartScreen warning is expected; signing hooks
   are left ready.
+- Start Menu: `Diffusion Studio\Diffusion Studio.lnk` targets the stable
+  stub (`...\DiffusionStudio\Diffusion Studio.exe`, update-proof).
+  Uninstall entry: `Diffusion Studio 0.205.2` in HKCU. Version metadata
+  stamped on both stub and versioned exe (File/Product 0.205.2, Company
+  `Diffusion Studio`).
 - `dapi` install behavior: user-PATH `...\DiffusionStudio\bin` entry,
   stable two-file launcher, full acceptance green (see TESTS).
 - Deep-link behavior: registered and routed (see TESTS).
@@ -267,7 +281,7 @@ chat harness, and compile pipeline it exercises are already proven).
 | cold-start | `open -a` | stub launch, env-stripped, detached | `cli-client.test` | `dapi open` relaunch, exit 0 | PASS | |
 | staged wrapper | POSIX sh | `dapi.cmd` + `dapi.js` on own Electron | `dapi-launcher.test` 4 green | `--version` 0.205.2 | PASS | |
 | PATH install | /usr/local/bin symlink | user-PATH stable bin, .NET broadcast | `cli-install-win.test` 10 green | full install/uninstall cycle ×2 | PASS | |
-| MCP externals | mac paths | per-target Windows paths | `mcp-config` 27 + `mcp-install` 11 | fixture + recon (prior) | PASS | live user-config connect/disconnect not executed |
+| MCP externals | mac paths | per-target Windows paths | `mcp-config` 27 + `mcp-install` 11 | live Codex TOML cycle + byte-exact restore | PASS | other agents fixture-only |
 | Codex harness | app-server | unchanged, Windows env preserved | — | probe: ready/0.155.0/5 live models | PASS | chat UI session pending login |
 | Claude harness | — | unchanged | — | — | NOT TESTED | not installed |
 | window chrome | hiddenInset/vibrancy | native frame | `window-chrome.test` | live screenshot 1184x735 | PASS | |
