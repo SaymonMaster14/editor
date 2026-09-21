@@ -5,9 +5,11 @@ infrastructure, packaging, and no-login acceptance is implemented and verified
 on the real machine. The user then logged into Diffusion Studio and the full
 authenticated `dapi` pipeline (open/context/check/capture/export/probe) went
 green on the installed build. A harness PATH-case discovery bug found via the user's picker screenshot
-was fixed (`cb16173`) and reinstalled (08:10 build). Remaining: picker
-confirmation, the user-operated embedded-Codex chat session, human+agent
-continuity, and the E2E video — see E2E.
+was fixed (`cb16173`) and reinstalled (08:10 build). The user then ran
+the full §31 embedded-Codex session: Codex discovered with live models,
+composition created, inspected via MCP capture/check, and exported —
+all independently verified (see E2E). Remaining: human+agent continuity
+and the E2E video.
 
 ## UPSTREAM
 
@@ -334,15 +336,25 @@ remains is the part the agent cannot operate itself: the in-app UI.
   staged, prompt handed to the user)
 - Prompt: §31 composition prompt (12 s, 1920x1080, background + title +
   clip + caption + motion, capture/check/fix/export loop)
-- Embedded-chat run (streaming, MCP `context/capture/check/export` from
-  chat, agent-edited source, chat-exported MP4): AWAITING USER RUN
-- Human+agent continuity (§19): PENDING (right after the chat run)
+- Embedded-chat run: DONE 2026-09-21 ~08:33 (model GPT-5.6-Luna,
+  live discovery, not the fallback). Transcript shows `media_probe`
+  + Thinking + file changes rendered; agent summary: 12 s 1920x1080
+  composition from both local assets, captures at 0/1/3/5.5/8.5/11.5 s,
+  final check clean, export `output/local-media-test.mp4`.
+  Independently verified: `index.tsx` 8 nodes (bg, keyframed still,
+  matte, clip w/ animations, accent bar, title, caption), workarea
+  12 s; `dapi check` 0 issues exit 0; MP4 15.1 MB 1920x1080 12 s
+  AVC + AAC stereo 48 kHz, 200 packets/track, track-clean probe.
+  Screenshot of the finished chat+timeline+canvas on file (user-
+  provided 08:33 capture).
+- Human+agent continuity (§19): IN PROGRESS (manual title edit next,
+  then same-chat follow-up)
 - E2E video: PENDING (after continuity)
 
 ## KNOWN LIMITATIONS
 
-- Embedded-chat E2E (in-app Codex session, continuity, video):
-  awaits the user-operated chat run, not code.
+- Embedded-chat E2E main run: DONE (see E2E). Continuity + video
+  still pending the user's manual edit and follow-up turn.
 - Squirrel uninstall leaves the HKCU `diffusion://` registration
   pointing at the removed exe until reinstall (upstream registers the
   protocol at runtime without an uninstall hook; same gap exists on
@@ -370,7 +382,7 @@ remains is the part the agent cannot operate itself: the in-app UI.
 | staged wrapper | POSIX sh | `dapi.cmd` + `dapi.js` on own Electron | `dapi-launcher.test` 4 green | `--version` 0.205.2 | PASS | |
 | PATH install | /usr/local/bin symlink | user-PATH stable bin, .NET broadcast | `cli-install-win.test` 12 green | full install/uninstall cycle ×2 | PASS | |
 | MCP externals | mac paths | per-target Windows paths | `mcp-config` 27 + `mcp-install` 11 | live Codex TOML cycle + byte-exact restore | PASS | other agents fixture-only |
-| Codex harness | app-server | `envGet` case fix for copied env | `env.test` 9 green | probe: ready/0.155.0/5 live models | PASS | picker re-test pending user |
+| Codex harness | app-server | `envGet` case fix for copied env | `env.test` 9 green | UI lists Codex; GPT-5.6-Luna ran full §31 | PASS | streaming/MCP/edit/export all live |
 | Claude harness | — | unchanged | — | — | NOT TESTED | not installed |
 | window chrome | hiddenInset/vibrancy | native frame | `window-chrome.test` | live screenshot 1184x735 | PASS | |
 | menu | mac menu | Windows menu, no mac roles | `menu.test` | installed build | PASS | |
@@ -389,7 +401,7 @@ remains is the part the agent cannot operate itself: the in-app UI.
 | uninstall | — | Squirrel entry + owned-files CLI removal | fixture tests | full uninstall+reinstall live | PASS | protocol key residue noted |
 | updates | update-electron-app | feed untouched, safe w/o metadata | — | starts clean, no error loop | PASS | no live update (no official assets) |
 | CI | mac release | `windows.yml` validate+package, Node 20 | — | check/lint/test/build run locally | PASS | GitHub run not triggered from here |
-| E2E video edit+export | — | — | — | dapi pipeline green; chat run pending | PARTIAL | awaiting user chat run |
+| E2E video edit+export | — | — | — | agent 8-node comp, check clean, 15MB MP4 probed | PARTIAL | continuity + video pending |
 
-Final SHA for this report: `cb16173` + this update (committed as
-`docs: record PATH-case discovery fix and rebuild`).
+Final SHA for this report: `94ad824` + this update (committed as
+`docs: record embedded-Codex E2E evidence`).
