@@ -125,6 +125,13 @@ export async function createImageEncoder(world: World, config: ImageEncoderConfi
 				normalizeSceneTransform(world, sceneId);
 				transformSystem(world);
 				renderSystem(world);
+				// Text takes its measured size during render, one systems pass
+				// behind the bounds above - so a hook reading bounds would see the
+				// previous frame's text boxes, and zeros on the first frame.
+				// Recompute from the just-rendered sizes when anyone is watching;
+				// exports without a hook pay nothing.
+				if (config.onFrame) transformSystem(world);
+				config.onFrame?.(frame);
 
 				images.set(frame, {
 					png: await encodePng(canvas),

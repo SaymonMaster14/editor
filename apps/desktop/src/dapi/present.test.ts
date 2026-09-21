@@ -7,6 +7,7 @@ import { tmpdir } from "node:os";
 import { basename, dirname, join } from "node:path";
 import { afterAll, describe, expect, it } from "vitest";
 import { present, toCallToolResult } from "./present";
+import type { QaReceipt } from "@diffusionstudio/dapi";
 
 const dir = mkdtempSync(join(tmpdir(), "dapi-present-"));
 afterAll(() => rmSync(dir, { recursive: true, force: true }));
@@ -67,6 +68,37 @@ describe("present", () => {
     const presented = await present("media_transcribe", { path: "/c.mp4", output: file }, { segments });
     expect(presented).toEqual({ output: { path: file, segments: 1, words: 2 }, images: [] });
     expect(JSON.parse(readFileSync(file, "utf8"))).toEqual({ segments });
+  });
+
+  it("writes sweep images plus a hashed receipt with delivery evidence", async () => {
+    const out = join(dir, "qa");
+    const result = {
+      scene: "Main",
+      images: [
+        { timecode: "00s00f", png: png(1) },
+        { timecode: "01s00f", png: png(2) },
+      ],
+      cells: [[0], [30]],
+      frames: [
+        { frame: 0, time: 0, timecode: "00s00f", reasons: ["scene-start"], luminance: 10, dark: false, uniform: false },
+        { frame: 30, time: 1, timecode: "01s00f", reasons: ["regular"], luminance: 0, dark: true, uniform: true },
+      ],
+      findings: [{ code: "rendered-black", severity: "warning", message: "frame renders black at 01s00f", frame: 30, time: 1 }],
+      fps: 30,
+      mode: "auto",
+    };
+    const presented = await present("qa_sweep", { id: "Main", output: out }, result);
+    const output = presented.output as { images: Array<{ path: string }>; receipt: { path: string; receipt: QaReceipt } };
+    expect(output.images).toHaveLength(2);
+    expect(readFileSync(output.images[0]!.path)).toEqual(Buffer.from(png(1)));
+    const onDisk = JSON.parse(readFileSync(output.receipt.path, "utf8"));
+    expect(onDisk).toEqual(output.receipt.receipt);
+    expect(onDisk.tool).toBe("qa_sweep");
+    expect(onDisk.images[0]).toMatchObject({ bytes: 8, delivery: "inline", frames: [0] });
+    expect(onDisk.images[0].sha256).toMatch(/^[0-9a-f]{64}$/);
+    expect(onDisk.stats).toEqual({ frames: 2, images: 2, errors: 0, warnings: 1 });
+    const again = await present("qa_sweep", { id: "Main", output: out }, result);
+    expect((again.output as { receipt: { path: string } }).receipt.path).toBe(join(out, "qa-receipt-2.json"));
   });
 
   it("passes other results through untouched", async () => {

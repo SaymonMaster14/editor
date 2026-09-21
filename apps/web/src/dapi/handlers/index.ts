@@ -3,6 +3,7 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 import { open } from "./open";
+import { qaSweep } from "./qa-sweep";
 import { context } from "./context";
 import { capture } from "./capture";
 import { check } from "./check";
@@ -26,6 +27,7 @@ export const handlers: Handlers = {
   context,
   capture,
   check,
+  qa_sweep: qaSweep,
   export: exportScene,
   models,
   voices,

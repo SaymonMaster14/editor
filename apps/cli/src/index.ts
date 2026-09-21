@@ -120,6 +120,23 @@ program
     console.log(JSON.stringify(output));
     if (output.issues.some((issue) => issue.severity === "error")) process.exitCode = 1;
   });
+program
+  .command("qa-sweep")
+  .alias("qa")
+  .description(`${describe("qa_sweep")} Exits 1 when an error-severity finding is recorded.`)
+  .argument("<id>", field("qa_sweep", "id"))
+  .option("-m, --mode <mode>", field("qa_sweep", "mode"))
+  .option("-n, --max-frames <n>", field("qa_sweep", "maxFrames"), numeric)
+  .option("-t, --times <time...>", field("qa_sweep", "times"))
+  .option("-S, --separate", field("qa_sweep", "separate"))
+  .option("--per-sheet <n>", field("qa_sweep", "perSheet"), numeric)
+  .option("-o, --output <dir>", field("qa_sweep", "output"))
+  .action(async (id: string, opts: Omit<ToolInput<"qa_sweep">, "id">) => {
+    const output = await call("qa_sweep", { id, ...opts, output: opts.output && resolve(opts.output) }).catch(appError);
+    console.log(JSON.stringify(output));
+    if (output.receipt.receipt.stats.errors > 0) process.exitCode = 1;
+  });
+
 
 const media = program
   .command("media")

@@ -6,19 +6,16 @@ import { existsSync } from "node:fs";
 import { mkdir, mkdtemp, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
-import type { TimecodedImage, ToolArgs, ToolName, ToolOutput, ToolResult } from "@diffusionstudio/dapi";
+import type { QaReceipt, TimecodedImage, ToolArgs, ToolName, ToolOutput, ToolResult } from "@diffusionstudio/dapi";
+import { qaDelivery } from "@diffusionstudio/dapi";
 
 /** A file the tool wrote, kept in memory only long enough to decide whether to inline it. */
 export type WrittenImage = { path: string; png: Uint8Array };
 
 export type Presented = { output: unknown; images: WrittenImage[] };
-
-/** More than this, or any image larger than INLINE_MAX_BYTES, and the caller gets paths only. */
-const INLINE_MAX_IMAGES = 4;
-const INLINE_MAX_BYTES = 1 << 20;
 
 const APP_SLUG = "diffusion-studio";
 
@@ -26,6 +23,8 @@ export async function present(name: ToolName, args: unknown, result: unknown): P
   switch (name) {
     case "capture":
       return presentImages(result as ToolResult<"capture">, (args as ToolArgs<"capture">).output, "capture");
+    case "qa_sweep":
+      return presentQaSweep(result as ToolResult<"qa_sweep">, (args as ToolArgs<"qa_sweep">).output);
     case "media_grab":
       return presentImages(result as ToolResult<"media_grab">, (args as ToolArgs<"media_grab">).output, "grab");
     case "media_filmstrip":
@@ -39,6 +38,57 @@ export async function present(name: ToolName, args: unknown, result: unknown): P
     default:
       return { output: result, images: [] };
   }
+}
+
+/**
+ * A sweep lands as images plus its QA receipt: the PNGs by timecode, then
+ * `qa-receipt.json` with every sampled frame, its sha256, which images rode
+ * inline (the caller saw those pixels) versus path-only, and the findings.
+ * Repeat sweeps to one directory keep every receipt, numbered in order, so
+ * iterations compare by hash.
+ */
+async function presentQaSweep(result: ToolResult<"qa_sweep">, output: string | undefined): Promise<Presented> {
+  const dir = output ?? (await mkdtemp(join(tmpdir(), "dapi-qa-")));
+  await mkdir(dir, { recursive: true });
+  const written: WrittenImage[] = [];
+  const refs: ToolOutput<"qa_sweep">["images"] = [];
+  for (const { timecode, png } of result.images) {
+    const path = join(dir, `${timecode}.png`);
+    await writeFile(path, png);
+    written.push({ path, png });
+    refs.push({ timecode, path });
+  }
+  const delivery = qaDelivery(result.images.map((image) => image.png.byteLength));
+  const receipt: QaReceipt = {
+    version: 1,
+    tool: "qa_sweep",
+    scene: result.scene,
+    createdAt: new Date().toISOString(),
+    fps: result.fps,
+    mode: result.mode,
+    images: result.images.map((image, index) => ({
+      timecode: image.timecode,
+      path: refs[index]!.path,
+      sha256: createHash("sha256").update(image.png).digest("hex"),
+      bytes: image.png.byteLength,
+      delivery: delivery[index]!,
+      frames: result.cells[index] ?? [],
+    })),
+    frames: result.frames,
+    findings: result.findings,
+    stats: {
+      frames: result.frames.length,
+      images: result.images.length,
+      errors: result.findings.filter((finding) => finding.severity === "error").length,
+      warnings: result.findings.filter((finding) => finding.severity === "warning").length,
+    },
+  };
+  let attempt = 1;
+  let receiptPath = join(dir, "qa-receipt.json");
+  while (existsSync(receiptPath)) receiptPath = join(dir, `qa-receipt-${++attempt}.json`);
+  await writeFile(receiptPath, JSON.stringify(receipt, null, 2));
+  const presented: ToolOutput<"qa_sweep"> = { images: refs, receipt: { path: receiptPath, receipt } };
+  return { output: presented, images: written };
 }
 
 // Frames and contact sheets arrive in the same shape: each image is stamped
@@ -112,7 +162,8 @@ function screenshotFilename(taken: Date, attempt: number): string {
 /** The MCP result: the output as text and structured content, plus the images when they are few and small. */
 export function toCallToolResult({ output, images }: Presented): CallToolResult {
   const content: CallToolResult["content"] = [{ type: "text", text: JSON.stringify(output) }];
-  const inline = images.length <= INLINE_MAX_IMAGES && images.every((image) => image.png.byteLength <= INLINE_MAX_BYTES);
+  const [delivery] = qaDelivery(images.map((image) => image.png.byteLength));
+  const inline = delivery === "inline" || images.length === 0;
   if (inline) {
     for (const { png } of images) {
       content.push({ type: "image", data: Buffer.from(png).toString("base64"), mimeType: "image/png" });

@@ -53,6 +53,11 @@ import type { DeepLinkChannel } from "./main-channels";
 import type { LogEntry } from "@diffusionstudio/dapi";
 
 const DEV_URL = "http://localhost:5173";
+// DEV ONLY: DIFFUSION_DEV_NO_AUTH=1 starts the dev window with ?no-auth,
+// which the renderer's dev-only auth bypass honors so headless dapi
+// validation can open local projects with no signed-in user. This branch
+// never runs when packaged.
+const DEV_QUERY = process.env.DIFFUSION_DEV_NO_AUTH ? "?no-auth" : "";
 const MACOS_CORNER_RADIUS = 18;
 const MACOS_BACKDROP = { blur: 80, red: 0.07, green: 0.07, blue: 0.07, alpha: 0.9 };
 
@@ -230,7 +235,7 @@ function createWindow(show = true) {
   });
 
   if (!app.isPackaged) {
-    mainWindow.loadURL(DEV_URL);
+    mainWindow.loadURL(DEV_URL + DEV_QUERY);
   } else {
     mainWindow.loadFile(join(app.getAppPath(), "web", "index.html"));
   }

@@ -17,7 +17,7 @@ import type { ToolHandler } from "../handler";
 // Absolute frames, [start, end).
 type Interval = { start: number; end: number };
 
-function kindOf(entity: Entity): string {
+export function kindOf(entity: Entity): string {
   if (entity.has(IsMask)) return "mask";
   if (entity.has(Scene)) return "scene";
   if (entity.has(Group)) return entity.has(Sequential) ? "sequence" : "group";
@@ -37,7 +37,7 @@ function kindOf(entity: Entity): string {
 // leaves do), adjustment layers and masks only shape what others draw, and a
 // scene's implicit background is exactly what a "black frame" looks like —
 // so none of those count as coverage.
-function drawsPixels(entity: Entity): boolean {
+export function drawsPixels(entity: Entity): boolean {
   return entity.has(Geometry)
     && !entity.has(Scene)
     && !entity.has(Group)

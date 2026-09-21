@@ -19,6 +19,8 @@ export type { DapiErrorCode } from "./errors";
 
 export { MAX_FRAMES_PER_SHEET, Bytes } from "./schemas";
 
+export { INLINE_MAX_IMAGES, INLINE_MAX_BYTES, qaDelivery, selectSweepPositions, framePixelStats, detectLayoutIssues } from "./qa";
+
 export { MCP_HOST, MCP_PORT, MCP_PATH, MCP_URL } from "./mcp";
 export { JSON_SCHEMA_DIALECT, toolJsonSchemas } from "./json-schema";
 export type { ToolJsonSchemas } from "./json-schema";
@@ -34,6 +36,20 @@ export { FONT_LIMIT } from "./tools/fonts";
 import type { ImageRef as ImageRefSchema, LogEntry as LogEntrySchema, LogLevel as LogLevelSchema, TimecodedImage as TimecodedImageSchema } from "./schemas";
 import type { GenerationRow as GenerationRowType } from "./tools/context";
 import type { CheckIssue as CheckIssueSchema, CheckIssueCode as CheckIssueCodeSchema } from "./tools/check";
+import type {
+  QaSweepMode as QaSweepModeSchema,
+  QaFinding as QaFindingSchema,
+  QaFindingCode as QaFindingCodeSchema,
+  QaFrameAnalysis as QaFrameAnalysisSchema,
+  QaReceiptImage as QaReceiptImageSchema,
+  QaReceipt as QaReceiptSchema,
+  QaReceiptRef as QaReceiptRefSchema,
+  QaLandmark,
+  QaPosition,
+  QaPixelStats,
+  QaLayoutNode,
+  QaDelivery,
+} from "./qa";
 import type { ExportFormat as ExportFormatSchema, ExportSettings as ExportSettingsSchema } from "./tools/export";
 import type { ModelInfo as ModelInfoSchema } from "./tools/models";
 import type { VoiceInfo as VoiceInfoSchema } from "./tools/voices";
@@ -49,6 +65,14 @@ export type ImageRef = z.output<typeof ImageRefSchema>;
 export type GenerationRow = GenerationRowType;
 export type CheckIssueCode = z.output<typeof CheckIssueCodeSchema>;
 export type CheckIssue = z.output<typeof CheckIssueSchema>;
+export type { QaLandmark, QaPosition, QaPixelStats, QaLayoutNode, QaDelivery };
+export type QaSweepMode = z.output<typeof QaSweepModeSchema>;
+export type QaFindingCode = z.output<typeof QaFindingCodeSchema>;
+export type QaFinding = z.output<typeof QaFindingSchema>;
+export type QaFrameAnalysis = z.output<typeof QaFrameAnalysisSchema>;
+export type QaReceiptImage = z.output<typeof QaReceiptImageSchema>;
+export type QaReceipt = z.output<typeof QaReceiptSchema>;
+export type QaReceiptRef = z.output<typeof QaReceiptRefSchema>;
 export type ExportFormat = z.output<typeof ExportFormatSchema>;
 export type ExportSettings = z.output<typeof ExportSettingsSchema>;
 export type ModelInfo = z.output<typeof ModelInfoSchema>;
@@ -64,6 +88,9 @@ export type ContextResult = ToolOutput<"context">;
 export type CaptureRequest = ToolArgs<"capture">;
 export type CaptureResult = ToolResult<"capture">;
 export type CheckRequest = ToolArgs<"check">;
+export type QaSweepRequest = ToolArgs<"qa_sweep">;
+export type QaSweepResult = ToolResult<"qa_sweep">;
+export type QaSweepOutput = ToolOutput<"qa_sweep">;
 export type CheckResult = ToolResult<"check">;
 export type ExportRequest = ToolArgs<"export">;
 export type ExportResult = ToolResult<"export">;

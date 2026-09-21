@@ -125,4 +125,12 @@ export interface ImageEncoderConfig {
 
 	/** Target output height in px (default: the node's native size). */
 	resolution?: number;
+
+	/**
+	 * Called after each frame's systems pass, before the PNG is encoded —
+	 * the world's WorldBounds and Computed stores are fresh for that frame.
+	 * The QA sweep snapshots layout here; anything else should leave it
+	 * unset. The frame is the capture-clock frame the caller asked for.
+	 */
+	onFrame?: (frame: number) => void;
 }

@@ -23,13 +23,18 @@ import { DashboardPage } from '@/pages/dashboard';
 
 function AuthGate(props: { children: JSX.Element }) {
   const auth = useAuth();
+  // DEV ONLY, compiled out of production builds (import.meta.env.DEV is
+  // statically false there): ?no-auth lets a headless dev instance open
+  // local projects for dapi validation with no signed-in user. Set by the
+  // main process from DIFFUSION_DEV_NO_AUTH; never honored when packaged.
+  const devNoAuth = () => import.meta.env.DEV && window.desktop && new URLSearchParams(window.location.search).has("no-auth");
 
   return (
     <Show when={!auth.isLoading()}>
-      <Show when={auth.isAuthenticated()}>
+      <Show when={auth.isAuthenticated() || devNoAuth()}>
         {props.children}
       </Show>
-      <Show when={!auth.isAuthenticated()}>
+      <Show when={!auth.isAuthenticated() && !devNoAuth()}>
         <LoginPage />
       </Show>
     </Show>

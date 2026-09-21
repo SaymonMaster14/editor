@@ -9,6 +9,7 @@ import { open } from "./tools/open";
 import { context } from "./tools/context";
 import { capture } from "./tools/capture";
 import { check } from "./tools/check";
+import { qaSweep } from "./tools/qa-sweep";
 import { exportScene } from "./tools/export";
 import { models } from "./tools/models";
 import { voices } from "./tools/voices";
@@ -34,6 +35,7 @@ export const catalog = [
   context,
   capture,
   check,
+  qaSweep,
   exportScene,
   mediaProbe,
   mediaGrab,

@@ -77,6 +77,14 @@ export class SheetCollector {
     this.frames.fill(undefined, from, to);
   }
 
+  /** Frame indices in each sheet, in order — the receipt's image-to-frame map. */
+  cells(): number[][] {
+    return this.sizes.map((_, sheet) => {
+      const from = this.firstIndex[sheet]!;
+      return Array.from({ length: this.sizes[sheet]! }, (_, k) => from + k);
+    });
+  }
+
   /** Every sheet, in order. Only complete once every frame has been added. */
   result(): TimecodedImage[] {
     return this.sheets.map((sheet, i) => {
