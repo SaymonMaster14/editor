@@ -27,7 +27,7 @@ function environmentTable(version: string): string {
   return ["| | |", "| --- | --- |", ...rows.map(([k, v]) => `| ${k} | ${v} |`)].join("\n");
 }
 
-function buildIssueBody(input: { body?: string; commands?: string[]; logs: string[]; version: string }): string {
+export function buildIssueBody(input: { body?: string; commands?: string[]; logs: string[]; version: string }): string {
   const sections: string[] = [];
   if (input.body?.trim()) sections.push(input.body.trim());
   if (input.commands?.length) sections.push(`## Repro\n\n${fence("sh", input.commands.join("\n"))}`);
