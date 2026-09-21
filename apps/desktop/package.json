@@ -42,6 +42,7 @@
     "@babel/preset-typescript": "^7.27.1",
     "@diffusionstudio/dapi": "*",
     "@diffusionstudio/jsx": "*",
+    "@diffusionstudio/winpaths": "*",
     "@modelcontextprotocol/sdk": "^1.30.0",
     "babel-preset-solid": "^1.9.12",
     "esbuild": "^0.28.1",

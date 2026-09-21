@@ -3,9 +3,11 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 import { execFile } from "node:child_process";
+import { statSync } from "node:fs";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import { MCP_URL } from "@diffusionstudio/dapi";
+import { appExePath, squirrelRoot } from "@diffusionstudio/winpaths";
 import { version } from "../../../package.json";
 
 import type { ToolInput, ToolName, ToolOutput } from "@diffusionstudio/dapi";
@@ -79,17 +81,51 @@ export function isAppDown(e: unknown): boolean {
 
 /**
  * Launches the app, or surfaces the running instance: `open -a` on a running
- * app only activates it, so this is safe to always run. macOS only; elsewhere
- * it resolves false and the caller falls through to the connection.
+ * app only activates it, so this is safe to always run. macOS and Windows;
+ * elsewhere it resolves false and the caller falls through to the connection.
  *
  * The bundled `dapi` runs as Electron with ELECTRON_RUN_AS_NODE=1, and `open`
  * hands its environment to the app it launches — left in, the app boots as
  * plain Node and never answers.
  */
+export function guiEnv(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
+  const { ELECTRON_RUN_AS_NODE: _dropped, ...rest } = env;
+  return rest;
+}
+
+function isFile(path: string): boolean {
+  try {
+    return statSync(path).isFile();
+  } catch {
+    return false;
+  }
+}
+
+export function resolveWindowsExe(
+  env: NodeJS.ProcessEnv = process.env,
+  exists: (path: string) => boolean = isFile,
+): string | null {
+  const fromEnv = env.DIFFUSION_APP_PATH;
+  if (fromEnv && exists(fromEnv)) return fromEnv;
+  const root = squirrelRoot(env);
+  if (root) {
+    const exe = appExePath(root);
+    if (exists(exe)) return exe;
+  }
+  return null;
+}
+
 export function launchApp(background: boolean): Promise<boolean> {
+  if (process.platform === "win32") {
+    const exe = resolveWindowsExe();
+    if (!exe) return Promise.resolve(false);
+    // Single instance stays in charge: a running app just gets focused.
+    const args = background ? ["--hidden"] : [];
+    return new Promise((res) => execFile(exe, args, { env: guiEnv(process.env), windowsHide: true }, (err) => res(!err)));
+  }
   if (process.platform !== "darwin") return Promise.resolve(false);
   const args = background ? ["-g", "-a", APP_NAME, "--args", "--hidden"] : ["-a", APP_NAME];
-  const { ELECTRON_RUN_AS_NODE: _, ...env } = process.env;
+  const env = guiEnv(process.env);
   return new Promise((res) => execFile("open", args, { env }, (err) => res(!err)));
 }
 

@@ -3,11 +3,17 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 // Stages the dapi CLI into apps/desktop/cli so electron-forge can ship it as
-// an app resource (Contents/Resources/cli). The staged layout:
+// an app resource (Contents/Resources/cli, resources\cli on Windows).
+// The staged layout:
 //   cli/dapi.js        bundled CLI (built by apps/cli), self-contained
-//   cli/bin/dapi       shell wrapper: what Claude Desktop runs as `dapi mcp`
-//                      (registered by mcp-install.ts) and the file that gets
-//                      linked into PATH
+//   cli/bin/dapi       POSIX shell wrapper: what Claude Desktop runs as
+//                      `dapi mcp` (registered by mcp-install.ts) and the
+//                      file that gets linked into PATH
+//   cli/bin/dapi.cmd   Windows launcher payload: the shim the user runs and
+//   cli/bin/dapi.js    the bootstrap that finds the current versioned
+//                      bundle. Payload only here; the in-app installer
+//                      copies them to the stable <install root>\bin.
+//                      Sources live in staged-cli/.
 
 import { chmodSync, cpSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -21,6 +27,13 @@ rmSync(stageDir, { recursive: true, force: true });
 mkdirSync(join(stageDir, "bin"), { recursive: true });
 
 cpSync(join(cliDir, "dist", "index.js"), join(stageDir, "dapi.js"));
+
+if (process.platform === "win32") {
+  cpSync(join(desktopDir, "staged-cli", "dapi.cmd"), join(stageDir, "bin", "dapi.cmd"));
+  cpSync(join(desktopDir, "staged-cli", "dapi.js"), join(stageDir, "bin", "dapi.js"));
+  console.log(`stage-cli: staged dapi at ${stageDir}`);
+  process.exit(0);
+}
 
 // The wrapper runs the CLI bundle on the app's own Electron binary in Node
 // mode, so users need no separate Node install. It resolves symlinks first

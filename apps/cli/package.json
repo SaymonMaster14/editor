@@ -9,11 +9,13 @@
   "scripts": {
     "build": "node scripts/build.mjs",
     "check": "tsc --noEmit",
+    "test": "vitest run",
     "symlink:remove": "node scripts/dev-link.mjs --remove",
     "symlink:create": "npm run build && node scripts/dev-link.mjs"
   },
   "dependencies": {
     "@diffusionstudio/dapi": "*",
+    "@diffusionstudio/winpaths": "*",
     "@modelcontextprotocol/sdk": "^1.30.0",
     "commander": "^14.0.3",
     "zod": "^4.4.3"
@@ -21,6 +23,7 @@
   "devDependencies": {
     "@types/node": "^24.10.1",
     "esbuild": "^0.28.1",
-    "typescript": "~5.9.3"
+    "typescript": "~5.9.3",
+    "vitest": "^4.0.0"
   }
 }

@@ -1,0 +1,25 @@
+{
+  "name": "@diffusionstudio/winpaths",
+  "version": "0.1.0",
+  "description": "Windows install-layout and user-PATH helpers shared by the dapi CLI and the desktop app: Squirrel version-dir resolution, the stable launcher bin, and pure PATH-entry transforms.",
+  "license": "MPL-2.0",
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "check": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "keywords": [
+    "windows",
+    "squirrel",
+    "paths"
+  ],
+  "devDependencies": {
+    "@types/node": "^24.10.1",
+    "typescript": "~5.9.3",
+    "vitest": "^4.0.0"
+  }
+}

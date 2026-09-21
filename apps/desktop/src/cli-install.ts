@@ -11,6 +11,7 @@ import { app } from "electron";
 import { execFile } from "node:child_process";
 import { existsSync, lstatSync, unlinkSync } from "node:fs";
 import { join } from "node:path";
+import { realWinCliEnv, winCliStatus, winInstallCli, winUninstallCli } from "./cli-install-win";
 
 import type { CliInstallResult, CliStatus, CliUninstallResult } from "./main-channels";
 
@@ -39,6 +40,7 @@ function installedPath(): string | null {
 
 /** Where `dapi` stands on this machine, without asking for a password. */
 export function cliStatus(): CliStatus {
+  if (process.platform === "win32") return winCliStatus(realWinCliEnv(app.isPackaged, process.resourcesPath));
   const path = installedPath();
   if (path) return { installed: true, path, managed: isLink(path), available: true };
   return { installed: false, path: null, managed: false, available: app.isPackaged };
@@ -56,6 +58,7 @@ function elevated(shell: string): Promise<void> {
 const cancelled = (e: unknown): boolean => ((e as Error).message ?? "").includes("-128");
 
 export async function installCli(): Promise<CliInstallResult> {
+  if (process.platform === "win32") return winInstallCli(realWinCliEnv(app.isPackaged, process.resourcesPath));
   if (!app.isPackaged) {
     return {
       status: "error",
@@ -78,6 +81,7 @@ export async function installCli(): Promise<CliInstallResult> {
  * folder refuses (/usr/local/bin is root's), the admin prompt takes over.
  */
 export async function uninstallCli(): Promise<CliUninstallResult> {
+  if (process.platform === "win32") return winUninstallCli(realWinCliEnv(app.isPackaged, process.resourcesPath));
   const path = installedPath();
   if (!path) return { status: "absent" };
   if (!isLink(path)) {
