@@ -1,0 +1,26 @@
+{
+  "name": "@diffusionstudio/analysis",
+  "version": "0.1.0",
+  "description": "Shared media-analysis infrastructure: content/parameter hashing, disk-backed analysis artifacts with cache-key reuse, and a resource-aware job scheduler (CPU/GPU queues, serial GPU, progress, cancellation, timeouts).",
+  "license": "MPL-2.0",
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "check": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "keywords": [
+    "analysis",
+    "cache",
+    "scheduler",
+    "media"
+  ],
+  "devDependencies": {
+    "@types/node": "^24.10.1",
+    "typescript": "~5.9.3",
+    "vitest": "^4.0.0"
+  }
+}
