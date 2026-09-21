@@ -13,6 +13,7 @@ import {
   currentBundlePath,
   pathHasEntry,
   removePathEntry,
+  resolveWindowsStdio,
   rootForResources,
   squirrelRoot,
   stableBinDir,
@@ -83,6 +84,48 @@ describe("install layout", () => {
   test("returns null when no version carries a bundle", () => {
     expect(currentBundlePath(fakeInstall({ "0.205.3": false }))).toBeNull();
     expect(currentBundlePath(tempDir())).toBeNull();
+  });
+});
+
+describe("resolveWindowsStdio", () => {
+  test("packaged: the stable stub on the current bundle, in node mode", () => {
+    const root = fakeInstall({ "0.205.2": true });
+    const exe = join(root, "Diffusion Studio.exe");
+    writeFileSync(exe, "stub");
+    const target = resolveWindowsStdio({
+      isPackaged: true,
+      resourcesPath: join(root, "app-0.205.2", "resources"),
+      appPath: join(root, "app-0.205.2", "resources", "app.asar"),
+    });
+    expect(target).toEqual({
+      command: exe,
+      args: [join(root, "app-0.205.2", BUNDLE_RELATIVE), "mcp"],
+      env: { ELECTRON_RUN_AS_NODE: "1" },
+    });
+  });
+
+  test("packaged: null when the stub or every bundle is missing", () => {
+    const root = fakeInstall({ "0.205.2": true });
+    const resources = join(root, "app-0.205.2", "resources");
+    expect(resolveWindowsStdio({ isPackaged: true, resourcesPath: resources, appPath: resources })).toBeNull();
+    writeFileSync(join(root, "Diffusion Studio.exe"), "stub");
+    rmSync(join(root, "app-0.205.2", BUNDLE_RELATIVE));
+    expect(resolveWindowsStdio({ isPackaged: true, resourcesPath: resources, appPath: resources })).toBeNull();
+  });
+
+  test("dev: the workspace electron on the workspace bundle", () => {
+    const repo = tempDir();
+    const appPath = join(repo, "apps", "desktop");
+    const electron = join(repo, "node_modules", "electron", "dist", "electron.exe");
+    const bundle = join(repo, "apps", "cli", "dist", "index.js");
+    mkdirSync(join(repo, "node_modules", "electron", "dist"), { recursive: true });
+    mkdirSync(join(repo, "apps", "cli", "dist"), { recursive: true });
+    writeFileSync(electron, "exe");
+    writeFileSync(bundle, "// cli");
+    const target = resolveWindowsStdio({ isPackaged: false, resourcesPath: "", appPath });
+    expect(target).toEqual({ command: electron, args: [bundle, "mcp"], env: { ELECTRON_RUN_AS_NODE: "1" } });
+    rmSync(bundle);
+    expect(resolveWindowsStdio({ isPackaged: false, resourcesPath: "", appPath })).toBeNull();
   });
 });
 

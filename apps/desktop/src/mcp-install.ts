@@ -13,36 +13,68 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { MCP_URL } from "@diffusionstudio/dapi";
-import { AGENT_TARGETS, agentTarget, needsBinary, readServer, removeServer, upsertServer } from "./mcp-config";
+import { resolveWindowsStdio } from "@diffusionstudio/winpaths";
+import { AGENT_TARGETS, agentTarget, needsBinary, readEntry, readServer, removeServer, resolveAgentPath, upsertServer } from "./mcp-config";
 
 import type { AgentTarget, McpServerSpec } from "./mcp-config";
 import type { McpAgentStatus, McpApplyRequest, McpApplyResult, McpStatus } from "./main-channels";
 
-// The dev workflow links the workspace build into Homebrew's bin
-// (`symlink:create` in apps/cli); that is the binary a dev build registers.
+// On macOS the dev workflow links the workspace build into Homebrew's bin
+// (`symlink:create` in apps/cli); that is the binary a macOS dev build registers.
 const DEV_BINARY = "/opt/homebrew/bin/dapi";
 
+/**
+ * Everything about this machine the registration reads: home, platform and
+ * env for the agent config paths, packaging state and install layout for
+ * the stdio proxy target. Live callers omit it; tests point it at a
+ * fixture home so no real user config is ever touched.
+ */
+export type McpInstallEnv = {
+  homeDir: string;
+  platform: NodeJS.Platform;
+  env: NodeJS.ProcessEnv;
+  isPackaged: boolean;
+  resourcesPath: string;
+  appPath: string;
+};
+
+function liveEnv(): McpInstallEnv {
+  return {
+    homeDir: homedir(),
+    platform: process.platform,
+    env: process.env,
+    isPackaged: app.isPackaged,
+    resourcesPath: process.resourcesPath,
+    appPath: app.getAppPath(),
+  };
+}
+
 /** The bundled `dapi` binary, or null when none is available (an unstaged dev build). */
-export function dapiBinary(): string | null {
-  const command = app.isPackaged ? join(process.resourcesPath, "cli", "bin", "dapi") : DEV_BINARY;
+export function dapiBinary(e: McpInstallEnv = liveEnv()): string | null {
+  const command = e.isPackaged ? join(e.resourcesPath, "cli", "bin", "dapi") : DEV_BINARY;
   return existsSync(command) ? command : null;
 }
 
-function spec(): McpServerSpec {
-  return { url: MCP_URL, command: dapiBinary() ?? "", args: ["mcp"] };
+function spec(e: McpInstallEnv): McpServerSpec {
+  if (e.platform === "win32") {
+    const stdio = resolveWindowsStdio(e);
+    if (stdio) return { url: MCP_URL, command: stdio.command, args: stdio.args, env: stdio.env };
+    return { url: MCP_URL, command: "", args: ["mcp"] };
+  }
+  return { url: MCP_URL, command: dapiBinary(e) ?? "", args: ["mcp"] };
 }
 
-function configPath(target: AgentTarget): string {
-  return join(homedir(), target.config);
+function configPath(target: AgentTarget, e: McpInstallEnv): string {
+  return resolveAgentPath(target.config, e);
 }
 
-function readConfig(target: AgentTarget): string | null {
-  const path = configPath(target);
+function readConfig(target: AgentTarget, e: McpInstallEnv): string | null {
+  const path = configPath(target, e);
   return existsSync(path) ? readFileSync(path, "utf8") : null;
 }
 
-function writeConfig(target: AgentTarget, text: string): void {
-  const path = configPath(target);
+function writeConfig(target: AgentTarget, e: McpInstallEnv, text: string): void {
+  const path = configPath(target, e);
   mkdirSync(dirname(path), { recursive: true });
   writeFileSync(path, text);
 }
@@ -54,31 +86,31 @@ function writeConfig(target: AgentTarget, text: string): void {
  * translocated read-only mount whose path won't survive the next launch —
  * registering it would dangle.
  */
-function unavailableReason(target: AgentTarget, current: McpServerSpec): string | null {
+function unavailableReason(target: AgentTarget, current: McpServerSpec, e: McpInstallEnv): string | null {
   if (!needsBinary(target)) return null;
   if (current.command === "") return "Needs the dapi command line tool, which this build does not include.";
-  if (app.isPackaged && current.command.includes("/AppTranslocation/")) {
+  if (e.isPackaged && current.command.includes("/AppTranslocation/")) {
     return "Move Diffusion Studio to the Applications folder and relaunch it first.";
   }
   return null;
 }
 
-function agentStatus(target: AgentTarget, current: McpServerSpec): McpAgentStatus {
-  const registered = readServer(readConfig(target), target.format);
+function agentStatus(target: AgentTarget, current: McpServerSpec, e: McpInstallEnv): McpAgentStatus {
+  const registered = readServer(readConfig(target, e), target.format);
   return {
     id: target.id,
     label: target.label,
-    detected: existsSync(join(homedir(), target.marker)),
+    detected: existsSync(resolveAgentPath(target.marker, e)),
     connected: registered !== null,
-    config: configPath(target),
-    unavailable: unavailableReason(target, current),
+    config: configPath(target, e),
+    unavailable: unavailableReason(target, current, e),
   };
 }
 
 /** Every agent we know, with whether it is on this machine and whether its config carries our entry. */
-export function mcpStatus(): McpStatus {
-  const current = spec();
-  return { url: current.url, agents: AGENT_TARGETS.map((target) => agentStatus(target, current)) };
+export function mcpStatus(e: McpInstallEnv = liveEnv()): McpStatus {
+  const current = spec(e);
+  return { url: current.url, agents: AGENT_TARGETS.map((target) => agentStatus(target, current, e)) };
 }
 
 /**
@@ -86,33 +118,33 @@ export function mcpStatus(): McpStatus {
  * of `remove`, one file at a time, so one unreadable config does not stop
  * the rest. Other servers in the same file are left alone either way.
  */
-export function applyMcp(request: McpApplyRequest): McpApplyResult {
-  const current = spec();
+export function applyMcp(request: McpApplyRequest, e: McpInstallEnv = liveEnv()): McpApplyResult {
+  const current = spec(e);
   const result: McpApplyResult = { added: [], removed: [], failures: [] };
 
   for (const id of request.add) {
     const target = agentTarget(id);
-    const reason = unavailableReason(target, current);
+    const reason = unavailableReason(target, current, e);
     if (reason) {
       result.failures.push({ id, error: reason });
       continue;
     }
     try {
-      writeConfig(target, upsertServer(readConfig(target), target.format, target.entry(current)));
+      writeConfig(target, e, upsertServer(readConfig(target, e), target.format, target.entry(current)));
       result.added.push(id);
-    } catch (e) {
-      result.failures.push({ id, error: `${target.config}: ${(e as Error).message}` });
+    } catch (err) {
+      result.failures.push({ id, error: `${configPath(target, e)}: ${(err as Error).message}` });
     }
   }
 
   for (const id of request.remove) {
     const target = agentTarget(id);
     try {
-      const next = removeServer(readConfig(target), target.format);
-      if (next !== null) writeConfig(target, next);
+      const next = removeServer(readConfig(target, e), target.format);
+      if (next !== null) writeConfig(target, e, next);
       result.removed.push(id);
-    } catch (e) {
-      result.failures.push({ id, error: `${target.config}: ${(e as Error).message}` });
+    } catch (err) {
+      result.failures.push({ id, error: `${configPath(target, e)}: ${(err as Error).message}` });
     }
   }
 
@@ -125,21 +157,32 @@ export function applyMcp(request: McpApplyRequest): McpApplyResult {
  * is rewritten to the binary this build has. Entries the user wrote by hand
  * for something else are left alone.
  */
-export function healMcpRegistrations(): void {
-  if (!app.isPackaged) return;
-  const current = spec();
+function stringList(value: unknown): string[] {
+  return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
+}
+
+/** Whether two arg vectors spell the same invocation, order included. */
+function argsEqual(a: unknown, b: unknown): boolean {
+  const left = stringList(a);
+  const right = stringList(b);
+  return left.length === right.length && left.every((item, i) => item === right[i]);
+}
+
+export function healMcpRegistrations(e: McpInstallEnv = liveEnv()): void {
+  if (!e.isPackaged) return;
+  const current = spec(e);
   if (current.command === "" || current.command.includes("/AppTranslocation/")) return;
 
   for (const target of AGENT_TARGETS) {
-    const text = readConfig(target);
+    const text = readConfig(target, e);
     const registered = readServer(text, target.format);
     if (!registered?.command) continue;
     const ours = registered.command.includes("Diffusion Studio") || registered.command.includes("/AppTranslocation/");
     if (!ours) continue;
     const entry = target.entry(current);
-    if (registered.command === entry.command) continue;
+    if (registered.command === entry.command && argsEqual(readEntry(text, target.format)?.args, entry.args)) continue;
     try {
-      writeConfig(target, upsertServer(text, target.format, entry));
+      writeConfig(target, e, upsertServer(text, target.format, entry));
     } catch {
       // best effort — the settings page remains as a manual fix
     }

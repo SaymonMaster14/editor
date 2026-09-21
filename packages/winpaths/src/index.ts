@@ -57,6 +57,33 @@ export function stableBootstrapPath(installRoot: string): string {
   return join(stableBinDir(installRoot), "dapi.js");
 }
 
+/** How an MCP client spawns the stdio proxy: the Electron binary on the CLI bundle, in Node mode. */
+export type WindowsStdioTarget = { command: string; args: string[]; env: Record<string, string> };
+
+/**
+ * The stdio proxy target: packaged, the stable stub on the current
+ * versioned bundle; in development, the workspace Electron on the
+ * workspace CLI bundle. Null when the other end is missing (an unstaged
+ * dev build), so registration can say why instead of dangling.
+ */
+export function resolveWindowsStdio(opts: {
+  isPackaged: boolean;
+  resourcesPath: string;
+  appPath: string;
+}): WindowsStdioTarget | null {
+  if (opts.isPackaged) {
+    const root = rootForResources(opts.resourcesPath);
+    const exe = appExePath(root);
+    const bundle = currentBundlePath(root);
+    if (!existsSync(exe) || !bundle) return null;
+    return { command: exe, args: [bundle, "mcp"], env: { ELECTRON_RUN_AS_NODE: "1" } };
+  }
+  const electron = join(opts.appPath, "..", "..", "node_modules", "electron", "dist", "electron.exe");
+  const bundle = join(opts.appPath, "..", "cli", "dist", "index.js");
+  if (!existsSync(electron) || !existsSync(bundle)) return null;
+  return { command: electron, args: [bundle, "mcp"], env: { ELECTRON_RUN_AS_NODE: "1" } };
+}
+
 /** Version dirs newest-first (`app-0.205.10` beats `app-0.205.2`). */
 export function versionDirs(
   installRoot: string,

@@ -11,7 +11,10 @@
  * URL, which is the same on every machine; the rest get the bundled `dapi`
  * binary in stdio proxy mode.
  */
-export type McpServerSpec = { url: string; command: string; args: string[] };
+import { homedir } from "node:os";
+import { join } from "node:path";
+
+export type McpServerSpec = { url: string; command: string; args: string[]; env?: Record<string, string> };
 
 /**
  * The key our entry lives under in every agent's server map, and so the
@@ -22,7 +25,7 @@ export type McpServerSpec = { url: string; command: string; args: string[] };
 export const SERVER_NAME = "diffusion";
 
 /** One agent's config entry: what its file format spells a server as. */
-export type ServerEntry = Record<string, string | string[]>;
+export type ServerEntry = Record<string, string | string[] | Record<string, string>>;
 
 /** The stable id an agent is addressed by over IPC and in the UI. */
 export type AgentId =
@@ -38,24 +41,54 @@ export type AgentId =
 /** How a config file spells its server map: JSON under `mcpServers` (or VS Code's `servers`), or Codex's TOML tables. */
 export type ConfigFormat = "mcpServers" | "servers" | "toml";
 
+/**
+ * Where an agent keeps a file: home-relative on every OS, or under the
+ * per-OS app-data dir with each OS spelling its own tail. macOS tails are
+ * the legacy strings, kept byte-identical; Windows tails were read off a
+ * real machine, not derived by swapping a prefix.
+ */
+export type AgentPath = { readonly base: "home"; readonly path: string } | { readonly base: "appData"; readonly mac: string; readonly win: string };
+
+export const home = (path: string): AgentPath => ({ base: "home", path });
+export const appData = (mac: string, win: string): AgentPath => ({ base: "appData", mac, win });
+
+/** An AgentPath as an absolute path for this (or, in tests, a given) machine. */
+export function resolveAgentPath(
+  p: AgentPath,
+  opts: { homeDir?: string; platform?: NodeJS.Platform; env?: NodeJS.ProcessEnv } = {},
+): string {
+  const homeDir = opts.homeDir ?? homedir();
+  if (p.base === "home") return join(homeDir, ...p.path.split("/"));
+  const segments = (p: string): string[] => p.split("/");
+  const platform = opts.platform ?? process.platform;
+  if (platform === "darwin") return join(homeDir, ...DARWIN_APP_SUPPORT.split("/"), ...segments(p.mac));
+  if (platform === "win32") {
+    const env = opts.env ?? process.env;
+    return join(env.APPDATA ?? join(homeDir, "AppData", "Roaming"), ...segments(p.win));
+  }
+  const env = opts.env ?? process.env;
+  return join(env.XDG_CONFIG_HOME ?? join(homeDir, ".config"), ...segments(p.win));
+}
+
 export type AgentTarget = {
   id: AgentId;
   /** Human name, for the UI. */
   label: string;
-  /** Home-relative path whose presence means the agent is set up on this machine. */
-  marker: string;
-  /** Home-relative path of the config file our entry goes into. */
-  config: string;
+  /** Location whose presence means the agent is set up on this machine. */
+  marker: AgentPath;
+  /** Location of the config file our entry goes into. */
+  config: AgentPath;
   format: ConfigFormat;
   /** The entry for this agent: which transport it gets, under the keys its format uses. */
   entry(spec: McpServerSpec): ServerEntry;
 };
 
 const http = (key: string, extra: ServerEntry = {}) => (spec: McpServerSpec): ServerEntry => ({ ...extra, [key]: spec.url });
-const stdio = (spec: McpServerSpec): ServerEntry => ({ command: spec.command, args: [...spec.args] });
+const stdio = (spec: McpServerSpec): ServerEntry =>
+  spec.env ? { command: spec.command, args: [...spec.args], env: { ...spec.env } } : { command: spec.command, args: [...spec.args] };
 
-/** Where macOS apps keep their per-user files; agents that are desktop apps put their config there. */
-const APP_SUPPORT = "Library/Application Support";
+/** Per-OS app-data roots live in resolveAgentPath; each entry below spells its own tail. */
+export const DARWIN_APP_SUPPORT = "Library/Application Support";
 
 // Agents whose MCP config we know how to write, in the order the UI lists
 // them. Claude Code's user scope is the top-level `mcpServers` of
@@ -65,28 +98,28 @@ const APP_SUPPORT = "Library/Application Support";
 // `serverUrl`. Claude Desktop's file takes stdio commands only, so it gets
 // the proxy.
 export const AGENT_TARGETS: readonly AgentTarget[] = [
-  { id: "claude-code", label: "Claude Code", marker: ".claude", config: ".claude.json", format: "mcpServers", entry: http("url", { type: "http" }) },
+  { id: "claude-code", label: "Claude Code", marker: home(".claude"), config: home(".claude.json"), format: "mcpServers", entry: http("url", { type: "http" }) },
   {
     id: "claude-desktop",
     label: "Claude Desktop",
-    marker: `${APP_SUPPORT}/Claude`,
-    config: `${APP_SUPPORT}/Claude/claude_desktop_config.json`,
+    marker: appData("Claude", "Claude"),
+    config: appData("Claude/claude_desktop_config.json", "Claude/claude_desktop_config.json"),
     format: "mcpServers",
     entry: stdio,
   },
-  { id: "cursor", label: "Cursor", marker: ".cursor", config: ".cursor/mcp.json", format: "mcpServers", entry: http("url") },
+  { id: "cursor", label: "Cursor", marker: home(".cursor"), config: home(".cursor/mcp.json"), format: "mcpServers", entry: http("url") },
   {
     id: "vscode",
     label: "VS Code (Copilot)",
-    marker: `${APP_SUPPORT}/Code`,
-    config: `${APP_SUPPORT}/Code/User/mcp.json`,
+    marker: appData("Code", "Code"),
+    config: appData("Code/User/mcp.json", "Code/User/mcp.json"),
     format: "servers",
     entry: http("url", { type: "http" }),
   },
-  { id: "codex", label: "Codex", marker: ".codex", config: ".codex/config.toml", format: "toml", entry: http("url") },
-  { id: "antigravity", label: "Antigravity", marker: ".gemini/antigravity", config: ".gemini/config/mcp_config.json", format: "mcpServers", entry: http("serverUrl") },
-  { id: "gemini-cli", label: "Gemini CLI", marker: ".gemini", config: ".gemini/settings.json", format: "mcpServers", entry: http("httpUrl") },
-  { id: "windsurf", label: "Devin (Windsurf)", marker: ".codeium/windsurf", config: ".codeium/windsurf/mcp_config.json", format: "mcpServers", entry: http("serverUrl") },
+  { id: "codex", label: "Codex", marker: home(".codex"), config: home(".codex/config.toml"), format: "toml", entry: http("url") },
+  { id: "antigravity", label: "Antigravity", marker: home(".gemini/antigravity"), config: home(".gemini/config/mcp_config.json"), format: "mcpServers", entry: http("serverUrl") },
+  { id: "gemini-cli", label: "Gemini CLI", marker: home(".gemini"), config: home(".gemini/settings.json"), format: "mcpServers", entry: http("httpUrl") },
+  { id: "windsurf", label: "Devin (Windsurf)", marker: home(".codeium/windsurf"), config: home(".codeium/windsurf/mcp_config.json"), format: "mcpServers", entry: http("serverUrl") },
 ];
 
 export function agentTarget(id: AgentId): AgentTarget {
@@ -120,12 +153,18 @@ export function removeServer(text: string | null, format: ConfigFormat): string 
   return format === "toml" ? removeToml(text as string) : removeJson(text as string, format);
 }
 
+/** Our raw entry as the file spells it, or null when there is none (or it cannot be parsed). */
+export function readEntry(text: string | null, format: ConfigFormat): Record<string, unknown> | null {
+  if (text === null) return null;
+  return format === "toml" ? readToml(text) : readJson(text, format);
+}
+
 /** Where our entry currently points, whatever keys the agent spells it with; null when there is none. */
 export type Registered = { url?: string; command?: string };
 
 export function readServer(text: string | null, format: ConfigFormat): Registered | null {
   if (text === null) return null;
-  const entry = format === "toml" ? readToml(text) : readJson(text, format);
+  const entry = readEntry(text, format);
   if (!entry) return null;
   const url = entry.url ?? entry.httpUrl ?? entry.serverUrl;
   const command = entry.command;
@@ -191,7 +230,8 @@ function tomlString(value: string): string {
   return `"${value.replaceAll("\\", "\\\\").replaceAll('"', '\\"')}"`;
 }
 
-function tomlValue(value: string | string[]): string {
+function tomlValue(value: string | string[] | Record<string, string>): string {
+  if (typeof value === "object" && !Array.isArray(value)) throw new Error("env maps are not supported in TOML configs");
   return Array.isArray(value) ? `[${value.map(tomlString).join(", ")}]` : tomlString(value);
 }
 

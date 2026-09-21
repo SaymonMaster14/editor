@@ -2,8 +2,9 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { AGENT_TARGETS, agentTarget, needsBinary, readServer, removeServer, upsertServer } from "./mcp-config";
+import { AGENT_TARGETS, agentTarget, needsBinary, readServer, removeServer, resolveAgentPath, upsertServer } from "./mcp-config";
 
 const spec = {
   url: "http://127.0.0.1:3274/mcp",
@@ -150,5 +151,67 @@ describe("toml configs (codex)", () => {
 
   it("empties a config that held only our table", () => {
     expect(removeServer(upsertServer(null, "toml", { url: spec.url }), "toml")).toBe("");
+  });
+});
+
+describe("agent paths", () => {
+  const HOME = join("C:", "Users", "u");
+  const APPDATA = join(HOME, "AppData", "Roaming");
+
+  it("keeps home-relative configs identical on every OS", () => {
+    for (const platform of ["darwin", "win32", "linux"] as const) {
+      expect(resolveAgentPath(agentTarget("codex").config, { homeDir: HOME, platform })).toBe(join(HOME, ".codex", "config.toml"));
+      expect(resolveAgentPath(agentTarget("cursor").config, { homeDir: HOME, platform })).toBe(join(HOME, ".cursor", "mcp.json"));
+    }
+  });
+
+  it("keeps the macOS app-data paths byte-identical", () => {
+    const opts = { homeDir: HOME, platform: "darwin" as const };
+    expect(resolveAgentPath(agentTarget("claude-desktop").marker, opts)).toBe(join(HOME, "Library", "Application Support", "Claude"));
+    expect(resolveAgentPath(agentTarget("claude-desktop").config, opts)).toBe(
+      join(HOME, "Library", "Application Support", "Claude", "claude_desktop_config.json"),
+    );
+    expect(resolveAgentPath(agentTarget("vscode").marker, opts)).toBe(join(HOME, "Library", "Application Support", "Code"));
+    expect(resolveAgentPath(agentTarget("vscode").config, opts)).toBe(join(HOME, "Library", "Application Support", "Code", "User", "mcp.json"));
+  });
+
+  it("roots desktop-app configs under the Windows roaming profile", () => {
+    const opts = { homeDir: HOME, platform: "win32" as const, env: { APPDATA } };
+    expect(resolveAgentPath(agentTarget("claude-desktop").marker, opts)).toBe(join(APPDATA, "Claude"));
+    expect(resolveAgentPath(agentTarget("claude-desktop").config, opts)).toBe(join(APPDATA, "Claude", "claude_desktop_config.json"));
+    expect(resolveAgentPath(agentTarget("vscode").marker, opts)).toBe(join(APPDATA, "Code"));
+    expect(resolveAgentPath(agentTarget("vscode").config, opts)).toBe(join(APPDATA, "Code", "User", "mcp.json"));
+  });
+
+  it("falls back to the default roaming dir and XDG config home", () => {
+    expect(resolveAgentPath(agentTarget("vscode").marker, { homeDir: HOME, platform: "win32", env: {} })).toBe(join(APPDATA, "Code"));
+    expect(resolveAgentPath(agentTarget("vscode").marker, { homeDir: "/home/u", platform: "linux", env: {} })).toBe(join("/home/u", ".config", "Code"));
+    expect(resolveAgentPath(agentTarget("vscode").marker, { homeDir: "/home/u", platform: "linux", env: { XDG_CONFIG_HOME: "/x" } })).toBe(
+      join("/x", "Code"),
+    );
+  });
+});
+
+describe("windows stdio entries", () => {
+  const winSpec = { ...spec, env: { ELECTRON_RUN_AS_NODE: "1" } };
+
+  it("carries the node-mode env only when the spec has one", () => {
+    expect(agentTarget("claude-desktop").entry(winSpec)).toEqual({ command: spec.command, args: ["mcp"], env: { ELECTRON_RUN_AS_NODE: "1" } });
+    expect(agentTarget("claude-desktop").entry(spec)).toEqual({ command: spec.command, args: ["mcp"] });
+    expect(AGENT_TARGETS.filter(needsBinary).map((t) => t.id)).toEqual(["claude-desktop"]);
+  });
+
+  it("round-trips the env through JSON while others survive", () => {
+    const before = JSON.stringify({ mcpServers: { other: { command: "x", args: [] } } });
+    const text = upsertServer(before, "mcpServers", agentTarget("claude-desktop").entry(winSpec));
+    const parsed = JSON.parse(text) as { mcpServers: Record<string, unknown> };
+    expect(parsed.mcpServers.other).toEqual({ command: "x", args: [] });
+    expect(parsed.mcpServers.diffusion).toEqual({ command: spec.command, args: ["mcp"], env: { ELECTRON_RUN_AS_NODE: "1" } });
+    expect(readServer(text, "mcpServers")).toEqual({ command: spec.command });
+    expect(JSON.parse(removeServer(text, "mcpServers") as string)).toEqual({ mcpServers: { other: { command: "x", args: [] } } });
+  });
+
+  it("refuses env maps in TOML instead of writing garbage", () => {
+    expect(() => upsertServer(null, "toml", { url: spec.url, env: { A: "b" } })).toThrow();
   });
 });
