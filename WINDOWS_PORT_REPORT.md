@@ -4,8 +4,10 @@ Branch `feat/windows-parity`. Status as of 2026-09-21: all Windows
 infrastructure, packaging, and no-login acceptance is implemented and verified
 on the real machine. The user then logged into Diffusion Studio and the full
 authenticated `dapi` pipeline (open/context/check/capture/export/probe) went
-green on the installed build. Remaining: the user-operated embedded-Codex
-chat session, human+agent continuity, and the E2E video — see E2E.
+green on the installed build. A harness PATH-case discovery bug found via the user's picker screenshot
+was fixed (`cb16173`) and reinstalled (08:10 build). Remaining: picker
+confirmation, the user-operated embedded-Codex chat session, human+agent
+continuity, and the E2E video — see E2E.
 
 ## UPSTREAM
 
@@ -13,8 +15,8 @@ chat session, human+agent continuity, and the E2E video — see E2E.
 - Baseline SHA (merge-base `main...HEAD`): `57c3983` (full:
   `57c39834bb3d2f116ce1d2c76cc8b881a279c2e6`)
 - Baseline version: 0.205.2
-- Final branch: `feat/windows-parity` (17 commits over baseline)
-- Final SHA: `6c3707e` (self-heal fix; report update committed on top as
+- Final branch: `feat/windows-parity`
+- Final SHA: `cb16173` (PATH-case discovery fix; report update committed on top as
   described at the end of this file)
 
 ## ENVIRONMENT
@@ -115,6 +117,15 @@ Each item names the gap, the fix, and why that shape was chosen.
     the files are gone, the app silently recreates only the files it
     owns. Never throws; dev builds and never-installed machines are
     untouched. (`6c3707e`)
+14. The chat model picker showed Codex as "Not installed" although
+    `codex.exe` was on the user PATH (user screenshot). Root cause:
+    `stripElectron` copies `process.env` with OS key casing (`Path`),
+    but `which()` read `host.env.PATH` — so the hydrated PATH was
+    always empty in a GUI-launched app, while npm-launched probes
+    worked (npm injects uppercase `PATH`, masking the bug). Added
+    `envGet` (exact match, then case-insensitive scan on Windows)
+    used by `which()` (`PATH`, `PATHEXT`) and `resolveBinary()`
+    (overrides). POSIX behavior unchanged. (`cb16173`)
 
 macOS behavior was preserved throughout: darwin-gated chrome, JXA fonts,
 `/usr/local/bin` symlink flow, and DMG release workflow are untouched
@@ -134,7 +145,7 @@ Commands run (native PowerShell, installed build unless noted):
   `apps/web/src/projects/edits.ts`, untouched file).
 - `npm run test` — cli 15/15; desktop 162/173 in the default run, with the
   11 missing tests (`projects.watch.test.ts`) passing 11/11 when TEMP is a
-  long path (see below); agent-chat 36/36; dapi 36/36; winpaths 12/12.
+  long path (see below); agent-chat 45/45 (incl. 9 env-casing); dapi 36/36; winpaths 12/12.
 - Watcher abort triage: `projects.watch.test.ts` aborts its worker with
   libuv `fs-event.c:72 !_wcsnicmp` when `os.tmpdir()` is the 8.3 spelling
   `C:\Users\PCTRAB~1\...`. Upstream-identical files (`git diff` empty),
@@ -211,6 +222,12 @@ Real desktop / installed-app tests (all on the installed build at
   disconnect/connect cycle behaved identically; the file was restored
   byte-exact (sha prefix `bb3248771b1ebded` before and after, `fc /b`
   clean). Only booleans/counts/hashes were printed — never contents.
+- Harness env-casing tests (`packages/agent-chat/test/env.test.ts`, 9
+  green): `which()`/`resolveBinary()` through mixed-case `Path` keys
+  (the GUI-app case), uppercase `PATH` (npm), mixed-case `PathExt`,
+  and lowercase overrides. Proven to fail without the fix (7 failed
+  on stashed source, 2 behavior-neutral passed); full agent-chat
+  suite 45/45, `tsc --noEmit` clean.
 - Authenticated `dapi` core on the installed build (after user login),
   project `%USERPROFILE%\Videos\Diffusion Studio\silent-sunset-20-sep`
   (1080p scene `vqq59t`, 8 s, AVC+AAC asset): `whoami` authenticated;
@@ -241,7 +258,7 @@ Real desktop / installed-app tests (all on the installed build at
   reports an account, probe status `ready` with the existing login, and
   `codex login status` confirms `Logged in using ChatGPT`. The renderer
   "ready" badge and the in-app chat session itself are NOT TESTED yet —
-  the user is running the §31 prompt in the embedded chat next.
+  the picker re-test + §31 chat run are the next user step (fix installed 08:10).
 - Models: REAL-WORLD-TESTED — live `model/list` (5 models, default
   `gpt-5.6-sol`), distinguished from the static fallback.
 - Streaming / attachments / questions / interrupt / persistence / resume /
@@ -278,7 +295,7 @@ Real desktop / installed-app tests (all on the installed build at
 
 - Setup.exe:
   `apps/desktop/out/make/squirrel.windows/x64/Diffusion Studio-0.205.2 Setup.exe`
-  (157,968,896 bytes, final build 2026-09-21 07:33 from HEAD `6c3707e`;
+  (final build 2026-09-21 08:10 from `cb16173`, PATH-case discovery fix;
   an earlier 01:01 build predated the CLI fixes and was superseded after
   the stale-bundle diagnosis above).
 - Installed to `%LOCALAPPDATA%\DiffusionStudio` (stable stub +
@@ -353,7 +370,7 @@ remains is the part the agent cannot operate itself: the in-app UI.
 | staged wrapper | POSIX sh | `dapi.cmd` + `dapi.js` on own Electron | `dapi-launcher.test` 4 green | `--version` 0.205.2 | PASS | |
 | PATH install | /usr/local/bin symlink | user-PATH stable bin, .NET broadcast | `cli-install-win.test` 12 green | full install/uninstall cycle ×2 | PASS | |
 | MCP externals | mac paths | per-target Windows paths | `mcp-config` 27 + `mcp-install` 11 | live Codex TOML cycle + byte-exact restore | PASS | other agents fixture-only |
-| Codex harness | app-server | unchanged, Windows env preserved | — | probe: ready/0.155.0/5 live models | PASS | chat UI session pending login |
+| Codex harness | app-server | `envGet` case fix for copied env | `env.test` 9 green | probe: ready/0.155.0/5 live models | PASS | picker re-test pending user |
 | Claude harness | — | unchanged | — | — | NOT TESTED | not installed |
 | window chrome | hiddenInset/vibrancy | native frame | `window-chrome.test` | live screenshot 1184x735 | PASS | |
 | menu | mac menu | Windows menu, no mac roles | `menu.test` | installed build | PASS | |
@@ -374,5 +391,5 @@ remains is the part the agent cannot operate itself: the in-app UI.
 | CI | mac release | `windows.yml` validate+package, Node 20 | — | check/lint/test/build run locally | PASS | GitHub run not triggered from here |
 | E2E video edit+export | — | — | — | dapi pipeline green; chat run pending | PARTIAL | awaiting user chat run |
 
-Final SHA for this report: `6c3707e` + this update (committed as
-`docs: record authenticated pipeline, uninstall cycle, E2E staging`).
+Final SHA for this report: `cb16173` + this update (committed as
+`docs: record PATH-case discovery fix and rebuild`).
