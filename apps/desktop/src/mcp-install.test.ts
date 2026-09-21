@@ -40,7 +40,7 @@ type WindowsFixture = { e: McpInstallEnv; homeDir: string; appdata: string; exe:
 function packagedWindows(root: string): WindowsFixture {
   const homeDir = join(root, "home");
   const appdata = join(homeDir, "AppData", "Roaming");
-  const installRoot = join(root, "Diffusion Studio");
+  const installRoot = join(root, "DiffusionStudio");
   const exe = join(installRoot, "Diffusion Studio.exe");
   const bundle = join(installRoot, "app-0.205.2", "resources", "cli", "dapi.js");
   mkdirSync(appdata, { recursive: true });
@@ -220,7 +220,7 @@ describe("self-heal", () => {
     const { e, appdata, exe, bundle } = packagedWindows(tempDir());
     const config = join(appdata, "Claude", "claude_desktop_config.json");
     mkdirSync(dirname(config), { recursive: true });
-    const stale = join(appdata, "..", "Local", "Diffusion Studio", "app-0.1.0", "Diffusion Studio.exe");
+    const stale = join(appdata, "..", "Local", "DiffusionStudio", "app-0.1.0", "Diffusion Studio.exe");
     writeFileSync(
       config,
       JSON.stringify({ mcpServers: { diffusion: { command: stale, args: ["mcp"] }, other: { command: "x", args: [] } } }),

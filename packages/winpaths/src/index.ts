@@ -7,7 +7,7 @@
 //
 // Squirrel installs under a versioned directory per release:
 //
-//   %LOCALAPPDATA%\Diffusion Studio\
+//   %LOCALAPPDATA%\DiffusionStudio\
 //     Diffusion Studio.exe      <- stable stub, forwards to the current version
 //     Update.exe
 //     app-0.205.2\             <- one dir per installed version
@@ -25,13 +25,17 @@ import { join } from "node:path";
 
 export const APP_NAME = "Diffusion Studio";
 export const EXE_NAME = "Diffusion Studio.exe";
+// The on-disk install dir. Must match MakerSquirrel `name` in
+// apps/desktop/forge.config.ts, which is a NuGet ID and cannot contain
+// spaces — that is why this differs from the display name above.
+export const INSTALL_DIR_NAME = "DiffusionStudio";
 export const BUNDLE_RELATIVE = join("resources", "cli", "dapi.js");
 
 /** The Squirrel install root, or null when %LOCALAPPDATA% is missing. */
 export function squirrelRoot(env: NodeJS.ProcessEnv = process.env): string | null {
   const local = env.LOCALAPPDATA;
   if (!local) return null;
-  return join(local, APP_NAME);
+  return join(local, INSTALL_DIR_NAME);
 }
 
 /** The Squirrel install root derived from a packaged resources dir. */

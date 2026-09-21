@@ -31,7 +31,7 @@ describe("guiEnv", () => {
 
 describe("resolveWindowsExe", () => {
   const appData = join("C:", "Users", "u", "AppData", "Local");
-  const stub = join(appData, "Diffusion Studio", "Diffusion Studio.exe");
+  const stub = join(appData, "DiffusionStudio", "Diffusion Studio.exe");
 
   test("prefers the launcher-provided path when it exists", () => {
     const custom = join("D:", "apps", "Diffusion Studio.exe");

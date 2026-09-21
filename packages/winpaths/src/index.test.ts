@@ -47,7 +47,7 @@ function fakeInstall(versions: Record<string, boolean>): string {
 describe("install layout", () => {
   test("resolves the root from the environment and from resources", () => {
     expect(squirrelRoot({ LOCALAPPDATA: join("C:", "Users", "u", "AppData", "Local") })).toBe(
-      join("C:", "Users", "u", "AppData", "Local", "Diffusion Studio"),
+      join("C:", "Users", "u", "AppData", "Local", "DiffusionStudio"),
     );
     expect(squirrelRoot({})).toBeNull();
     const resources = join("C:", "root", "app-0.205.2", "resources");
