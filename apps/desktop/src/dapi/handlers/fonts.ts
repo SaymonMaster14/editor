@@ -5,6 +5,7 @@
 import { spawnSync } from "node:child_process";
 import { platform } from "node:os";
 import { DapiError, FONT_LIMIT } from "@diffusionstudio/dapi";
+import { listWindowsFonts } from "./fonts-win";
 
 import type { FontFamily } from "@diffusionstudio/dapi";
 import type { MainHandler } from "../handler";
@@ -57,8 +58,11 @@ function run() {
 `;
 
 function listLocalFonts(): FontFamily[] {
+  if (platform() === "win32") {
+    return listWindowsFonts();
+  }
   if (platform() !== "darwin") {
-    throw new DapiError("unsupported", "fonts is only supported on macOS.");
+    throw new DapiError("unsupported", "fonts is only supported on macOS and Windows.");
   }
   const result = spawnSync("osascript", ["-l", "JavaScript", "-e", LIST_FONTS_JXA], {
     encoding: "utf8",
@@ -70,12 +74,23 @@ function listLocalFonts(): FontFamily[] {
   return JSON.parse(result.stdout.trim()) as FontFamily[];
 }
 
-export const fonts: MainHandler<"fonts"> = async ({ family, weights, style, limit = FONT_LIMIT }) => {
+export type FontsFilter = {
+  family?: string;
+  weights?: string[];
+  style?: "normal" | "italic";
+  limit?: number;
+};
+
+/** The family/weight/style/limit filter, shared by every platform's listing. */
+export function filterFamilies(
+  all: FontFamily[],
+  { family, weights, style, limit = FONT_LIMIT }: FontsFilter,
+): { families: FontFamily[]; total: number } {
   const pattern = family?.toLowerCase();
   const wanted = weights && weights.length > 0 ? new Set(weights) : null;
 
   const families: FontFamily[] = [];
-  for (const entry of listLocalFonts()) {
+  for (const entry of all) {
     if (pattern && !entry.family.toLowerCase().includes(pattern)) continue;
     const variants = entry.variants.filter((v) => {
       if (wanted && !wanted.has(v.weight)) return false;
@@ -86,4 +101,6 @@ export const fonts: MainHandler<"fonts"> = async ({ family, weights, style, limi
     families.push({ family: entry.family, variants });
   }
   return { families: families.slice(0, limit), total: families.length };
-};
+}
+
+export const fonts: MainHandler<"fonts"> = async (args) => filterFamilies(listLocalFonts(), args);
