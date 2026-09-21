@@ -12,7 +12,7 @@
 
 import { QuestionBox, newItemId } from "./harness";
 
-import type { HarnessInfo, RequestResponse } from "../protocol";
+import type { HarnessCapabilities, HarnessInfo, RequestResponse } from "../protocol";
 import type { Emit, Harness, HarnessSession, OpenOptions, ResumeCursor, TurnOutcome } from "./harness";
 
 export type FakeOptions = {
@@ -142,6 +142,18 @@ class FakeSession implements HarnessSession {
 
 export class FakeHarness implements Harness {
   readonly id = "claude" as const;
+  readonly capabilities: HarnessCapabilities = {
+    streaming: true,
+    images: false,
+    attachments: true,
+    mcp: false,
+    approvals: false,
+    questions: true,
+    interrupt: true,
+    resume: true,
+    models: true,
+    sessions: true,
+  };
   readonly options: FakeOptions;
   readonly sessions: FakeSession[] = [];
   probeStatus: HarnessInfo["status"] = "ready";
@@ -154,6 +166,7 @@ export class FakeHarness implements Harness {
     return {
       id: this.id,
       label: "Fake",
+      capabilities: this.capabilities,
       status: this.probeStatus,
       version: "0.0.0",
       models: [

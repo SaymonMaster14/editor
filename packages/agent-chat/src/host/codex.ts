@@ -15,7 +15,7 @@ import { JsonRpcPeer, RpcError } from "./jsonrpc";
 import { QuestionBox, newItemId, summarizeInput, truncateDetail } from "./harness";
 
 import type { ChildProcess } from "node:child_process";
-import type { HarnessInfo, Item, Question, RequestResponse } from "../protocol";
+import type { HarnessCapabilities, HarnessInfo, Item, Question, RequestResponse } from "../protocol";
 import type { HostEnv } from "./env";
 import type { Emit, Harness, HarnessSession, OpenOptions, ResumeCursor, TurnOutcome } from "./harness";
 
@@ -418,6 +418,18 @@ function safeStringify(value: unknown): string {
 
 export class CodexHarness implements Harness {
   readonly id = "codex" as const;
+  readonly capabilities: HarnessCapabilities = {
+    streaming: true,
+    images: false,
+    attachments: true,
+    mcp: true,
+    approvals: false,
+    questions: true,
+    interrupt: true,
+    resume: true,
+    models: true,
+    sessions: true,
+  };
   private readonly version: string;
   private readonly policy: Policy = { full: true };
 
@@ -428,7 +440,7 @@ export class CodexHarness implements Harness {
   async probe(env: HostEnv, signal: AbortSignal): Promise<HarnessInfo> {
     const label = HARNESS_LABELS.codex;
     const binary = resolveBinary("codex", env);
-    if (!binary) return { id: this.id, label, status: "not-installed", detail: "Install Codex, then reopen the picker", models: [] };
+    if (!binary) return { id: this.id, label, capabilities: this.capabilities, status: "not-installed", detail: "Install Codex, then reopen the picker", models: [] };
 
     const child = spawnAppServer(binary, process.cwd(), env.env, null);
     const peer = new JsonRpcPeer(child);
@@ -440,20 +452,20 @@ export class CodexHarness implements Harness {
       const outdated = version && compareVersions(version, MIN_VERSION) < 0 ? `Update Codex (${version} is older than ${MIN_VERSION})` : undefined;
       const account = (await peer.request("account/read", { refreshToken: false })) as { account?: unknown; requiresOpenaiAuth?: boolean };
       if (!account.account && account.requiresOpenaiAuth) {
-        return { id: this.id, label, status: "signed-out", detail: "Run `codex login` in a terminal", version, models: [] };
+        return { id: this.id, label, capabilities: this.capabilities, status: "signed-out", detail: "Run `codex login` in a terminal", version, models: [] };
       }
       const list = (await peer.request("model/list", {})) as { data?: { id?: string; model?: string; displayName?: string; hidden?: boolean; isDefault?: boolean }[] };
       const models = (list.data ?? [])
         .filter((model) => !model.hidden && (model.id || model.model))
         .map((model) => ({ id: (model.id ?? model.model)!, label: model.displayName ?? (model.id ?? model.model)! }));
       const defaultModel = (list.data ?? []).find((model) => model.isDefault)?.id ?? models[0]?.id;
-      return { id: this.id, label, status: "ready", detail: outdated, version, models: models.length ? models : STATIC_MODELS, defaultModel };
+      return { id: this.id, label, capabilities: this.capabilities, status: "ready", detail: outdated, version, models: models.length ? models : STATIC_MODELS, defaultModel };
     } catch (error) {
       const message = (error as Error)?.message ?? String(error);
       if (/log ?in|not authenticated|unauthori[sz]ed/i.test(message)) {
-        return { id: this.id, label, status: "signed-out", detail: "Run `codex login` in a terminal", models: [] };
+        return { id: this.id, label, capabilities: this.capabilities, status: "signed-out", detail: "Run `codex login` in a terminal", models: [] };
       }
-      return { id: this.id, label, status: "ready", detail: /exited/i.test(message) ? undefined : message, models: STATIC_MODELS, defaultModel: STATIC_MODELS[0]!.id };
+      return { id: this.id, label, capabilities: this.capabilities, status: "ready", detail: /exited/i.test(message) ? undefined : message, models: STATIC_MODELS, defaultModel: STATIC_MODELS[0]!.id };
     } finally {
       clearTimeout(timer);
       signal.removeEventListener("abort", onAbort);

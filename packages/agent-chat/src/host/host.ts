@@ -205,7 +205,7 @@ export class AgentHost {
 
   private harnessList(): HarnessInfo[] {
     return HARNESS_IDS.filter((id) => this.harnessById.has(id)).map(
-      (id) => this.probes.get(id)?.info ?? { id, label: HARNESS_LABELS[id], status: "checking", models: [] },
+      (id) => this.probes.get(id)?.info ?? { id, label: HARNESS_LABELS[id], status: "checking", models: [], capabilities: this.harnessById.get(id)!.capabilities },
     );
   }
 
@@ -232,6 +232,7 @@ export class AgentHost {
             info = {
               id: harness.id,
               label: HARNESS_LABELS[harness.id],
+              capabilities: harness.capabilities,
               status: "error",
               detail: (error as Error)?.message ?? String(error),
               models: [],

@@ -26,7 +26,7 @@ import type {
   SDKMessage,
   SDKUserMessage,
 } from "@anthropic-ai/claude-agent-sdk";
-import type { HarnessInfo, Item, Question, RequestResponse } from "../protocol";
+import type { HarnessCapabilities, HarnessInfo, Item, Question, RequestResponse } from "../protocol";
 import type { HostEnv } from "./env";
 import type { Emit, Harness, HarnessSession, OpenOptions, ResumeCursor, TurnOutcome } from "./harness";
 
@@ -500,6 +500,18 @@ class ClaudeSession implements HarnessSession {
 
 export class ClaudeHarness implements Harness {
   readonly id = "claude" as const;
+  readonly capabilities: HarnessCapabilities = {
+    streaming: true,
+    images: true,
+    attachments: true,
+    mcp: true,
+    approvals: false,
+    questions: true,
+    interrupt: true,
+    resume: true,
+    models: true,
+    sessions: true,
+  };
   private readonly version: string;
   /** Remembered while the host runs: once a policy refused bypass, every chat starts lower. */
   private readonly policy: Policy = { mode: "bypassPermissions" };
@@ -512,12 +524,12 @@ export class ClaudeHarness implements Harness {
     const label = HARNESS_LABELS.claude;
     const binary = resolveBinary("claude", env);
     if (!binary) {
-      return { id: this.id, label, status: "not-installed", detail: "Install Claude Code, then reopen the picker", models: [] };
+      return { id: this.id, label, capabilities: this.capabilities, status: "not-installed", detail: "Install Claude Code, then reopen the picker", models: [] };
     }
     const version = parseVersion(await runOnce(binary, ["--version"], env));
     const outdated = version && compareVersions(version, MIN_VERSION) < 0 ? `Update Claude Code (${version} is older than ${MIN_VERSION})` : undefined;
     if ((await loggedIn(binary, env)) === false) {
-      return { id: this.id, label, status: "signed-out", detail: SIGN_IN_HINT, version, models: [] };
+      return { id: this.id, label, capabilities: this.capabilities, status: "signed-out", detail: SIGN_IN_HINT, version, models: [] };
     }
     const path = resolveClaudeExecutable(binary);
 
@@ -546,14 +558,14 @@ export class ClaudeHarness implements Harness {
     } catch (error) {
       const message = (error as Error)?.message ?? String(error);
       if (isAuthFailure(message)) {
-        return { id: this.id, label, status: "signed-out", detail: SIGN_IN_HINT, version, models: [] };
+        return { id: this.id, label, capabilities: this.capabilities, status: "signed-out", detail: SIGN_IN_HINT, version, models: [] };
       }
       // The binary is there; whatever went wrong will show on the first send.
       detail ??= /timed out/i.test(message) ? undefined : message;
     } finally {
       q.close();
     }
-    return { id: this.id, label, status: "ready", detail, version, models, defaultModel };
+    return { id: this.id, label, capabilities: this.capabilities, status: "ready", detail, version, models, defaultModel };
   }
 
   async open(options: OpenOptions): Promise<HarnessSession> {

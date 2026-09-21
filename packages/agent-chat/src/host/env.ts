@@ -134,12 +134,13 @@ export function envGet(env: Record<string, string>, key: string): string | undef
 
 /**
  * `which`, over the hydrated PATH and then the known install dirs. On Windows
+ * the PATHEXT variants come before the bare name, so an extensionless POSIX
  * the PATHEXT variants are tried, so `claude.cmd` and `codex.exe` are found.
  */
 export function which(name: string, host: HostEnv): string | null {
   const dirs = [...(envGet(host.env, "PATH") ?? "").split(delimiter).filter(Boolean), ...host.extraDirs];
   const names = IS_WINDOWS
-    ? [name, ...(envGet(host.env, "PATHEXT") ?? ".EXE;.CMD;.BAT").split(";").map((ext) => name + ext.toLowerCase())]
+    ? [...(envGet(host.env, "PATHEXT") ?? ".EXE;.CMD;.BAT").split(";").map((ext) => name + ext.toLowerCase()), name]
     : [name];
   for (const dir of dirs) {
     for (const candidate of names) {
@@ -151,10 +152,10 @@ export function which(name: string, host: HostEnv): string | null {
 }
 
 /**
- * Where a harness binary is: an explicit override (`DIFFUSION_CLAUDE_PATH`,
+ * Where a harness binary is: an explicit override (`DIFFUSION_<NAME>_PATH`,
  * `DIFFUSION_CODEX_PATH`), else `which`.
  */
-export function resolveBinary(name: "claude" | "codex", host: HostEnv): string | null {
+export function resolveBinary(name: string, host: HostEnv): string | null {
   const overrideKey = `DIFFUSION_${name.toUpperCase()}_PATH`;
   const override = envGet(host.env, overrideKey) ?? process.env[overrideKey];
   if (override && isExecutable(override)) return override;

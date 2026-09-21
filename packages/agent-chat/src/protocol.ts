@@ -7,16 +7,44 @@
 // a project lives. The host owns all state; the UI is a view over a snapshot
 // (`chats.open`) plus the events that follow it.
 
-export type HarnessId = "claude" | "codex";
+export type HarnessId = "claude" | "codex" | "opencode" | "muse";
 
 /** The single dropdown's value: which harness, and which of its models. */
 export type ModelRef = { harness: HarnessId; model: string };
 
 export type HarnessStatus = "ready" | "not-installed" | "signed-out" | "error" | "checking";
 
+/**
+ * What a harness can do, so the host and UI never assume all agents behave
+ * alike. A harness reports these honestly from its implementation; the host
+ * degrades (e.g. `[image]` markers, no resume) where one is false.
+ */
+export type HarnessCapabilities = {
+  /** Text streams during the turn (`item.delta`), not just at the end. */
+  streaming: boolean;
+  /** Tool images reach the transcript as images (else `[image]` markers). */
+  images: boolean;
+  /** `turn.send` attachments are delivered to the agent. */
+  attachments: boolean;
+  /** The diffusion MCP server is injected into sessions. */
+  mcp: boolean;
+  /** Approval requests surface to the user (vs auto-answered). */
+  approvals: boolean;
+  /** The agent can ask the user questions mid-turn. */
+  questions: boolean;
+  /** A running turn can be interrupted. */
+  interrupt: boolean;
+  /** Sessions resume across host restarts via a cursor. */
+  resume: boolean;
+  /** The probe lists selectable models. */
+  models: boolean;
+  /** Named, persistent sessions (vs one-shot turns). */
+  sessions: boolean;
+};
+
 export type HarnessInfo = {
   id: HarnessId;
-  /** "Claude Code" | "Codex" */
+  /** "Claude Code" | "Codex" | "OpenCode" | "Muse Code" */
   label: string;
   status: HarnessStatus;
   /** e.g. "Run `codex login` in a terminal" */
@@ -24,6 +52,7 @@ export type HarnessInfo = {
   version?: string;
   models: { id: string; label: string }[];
   defaultModel?: string;
+  capabilities: HarnessCapabilities;
 };
 
 export type ChatStatus = "idle" | "running" | "waiting";
@@ -163,10 +192,12 @@ export function titleFor(text: string): string {
 export const HARNESS_LABELS: Record<HarnessId, string> = {
   claude: "Claude Code",
   codex: "Codex",
+  opencode: "OpenCode",
+  muse: "Muse Code",
 };
 
-export const HARNESS_IDS: readonly HarnessId[] = ["claude", "codex"];
+export const HARNESS_IDS: readonly HarnessId[] = ["claude", "codex", "opencode", "muse"];
 
 export function isHarnessId(value: unknown): value is HarnessId {
-  return value === "claude" || value === "codex";
+  return value === "claude" || value === "codex" || value === "opencode" || value === "muse";
 }

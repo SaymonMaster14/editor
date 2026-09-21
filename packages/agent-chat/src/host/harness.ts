@@ -9,6 +9,7 @@ import { randomUUID } from "node:crypto";
 
 import type {
   ChatEvent,
+  HarnessCapabilities,
   HarnessId,
   HarnessInfo,
   Item,
@@ -20,7 +21,11 @@ import type {
 } from "../protocol";
 import type { HostEnv } from "./env";
 
-export type ResumeCursor = { claude: { sessionId: string } } | { codex: { threadId: string } };
+export type ResumeCursor =
+  | { claude: { sessionId: string } }
+  | { codex: { threadId: string } }
+  | { opencode: { sessionId: string } }
+  | { muse: { sessionId: string } };
 
 export type McpConfig = { name: "diffusion"; url: string };
 
@@ -54,6 +59,7 @@ export interface HarnessSession {
 
 export interface Harness {
   readonly id: HarnessId;
+  readonly capabilities: HarnessCapabilities;
   probe(env: HostEnv, signal: AbortSignal): Promise<HarnessInfo>;
   open(options: OpenOptions): Promise<HarnessSession>;
 }
