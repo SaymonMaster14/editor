@@ -134,8 +134,8 @@ export function envGet(env: Record<string, string>, key: string): string | undef
 
 /**
  * `which`, over the hydrated PATH and then the known install dirs. On Windows
- * the PATHEXT variants come before the bare name, so an extensionless POSIX
- * the PATHEXT variants are tried, so `claude.cmd` and `codex.exe` are found.
+ * the PATHEXT variants come before the bare name, so an extensionless POSIX shim
+ * never shadows a runnable `opencode.cmd` or `codex.exe`.
  */
 export function which(name: string, host: HostEnv): string | null {
   const dirs = [...(envGet(host.env, "PATH") ?? "").split(delimiter).filter(Boolean), ...host.extraDirs];
@@ -185,6 +185,32 @@ export function resolveClaudeExecutable(path: string): string {
     }
   } catch {
     // Fall through: the SDK's own error will say what went wrong.
+  }
+  return path;
+}
+
+/**
+ * An npm `opencode.cmd` shim on Windows spawns through cmd.exe, which mangles
+ * a long-lived stdio server; followed to the `opencode.exe` it wraps. A
+ * `.ps1` shim cannot be spawned without PowerShell, so it is followed the
+ * same way. Anything else — the native exe, a POSIX path — is returned as is.
+ */
+export function resolveOpencodeExecutable(path: string): string {
+  if (!IS_WINDOWS || !/\.(cmd|ps1)$/i.test(path)) return path;
+  const dir = dirname(path);
+  const direct = join(dir, "node_modules", "opencode-ai", "bin", "opencode.exe");
+  if (existsSync(direct)) return direct;
+  // A shim of another shape: read the target out of it.
+  try {
+    const shim = readFileSync(path, "utf8");
+    const expanded = shim.replace(/%dp0%/g, `${dir}\\`);
+    const match = /"([^"]*opencode\.exe)"/i.exec(expanded);
+    if (match) {
+      const target = resolve(dir, match[1]!);
+      if (existsSync(target)) return target;
+    }
+  } catch {
+    // Fall through: spawning the shim is the fallback.
   }
   return path;
 }

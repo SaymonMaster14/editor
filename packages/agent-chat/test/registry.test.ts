@@ -8,6 +8,7 @@ import { HARNESS_IDS, HARNESS_LABELS, isHarnessId } from "../src/protocol";
 import { ClaudeHarness } from "../src/host/claude";
 import { CodexHarness } from "../src/host/codex";
 import { FakeHarness } from "../src/host/fake";
+import { OpenCodeHarness } from "../src/host/opencode";
 
 import type { HarnessCapabilities } from "../src/protocol";
 
@@ -35,7 +36,7 @@ describe("harness registry", () => {
   });
 
   it("exposes a full capability set from every harness", () => {
-    for (const harness of [new ClaudeHarness(), new CodexHarness(), new FakeHarness()]) {
+    for (const harness of [new ClaudeHarness(), new CodexHarness(), new FakeHarness(), new OpenCodeHarness()]) {
       expect(HARNESS_IDS).toContain(harness.id);
       for (const key of CAPABILITY_KEYS) {
         expect(typeof harness.capabilities[key], `${harness.id}.${key}`).toBe("boolean");
@@ -48,7 +49,7 @@ describe("harness registry", () => {
     expect(info.capabilities).toEqual(new FakeHarness().capabilities);
   });
 
-  it("registers opencode and muse ids for future harnesses", () => {
+  it("registers opencode and muse ids", () => {
     expect(HARNESS_IDS).toContain("opencode");
     expect(HARNESS_IDS).toContain("muse");
     expect(HARNESS_LABELS.opencode).toBe("OpenCode");
