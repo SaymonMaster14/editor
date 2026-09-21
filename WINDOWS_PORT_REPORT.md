@@ -152,6 +152,12 @@ Real desktop / installed-app tests (all on the installed build at
   (second uninstall → `absent`, second install → `installed`). Green twice.
 - `dapi open` with the app closed relaunched it (exit 0); DAPI listened on
   127.0.0.1:3274 only; `dapi models` returned structured JSON.
+- `dapi open <path>` torture on the fresh build, cold then warm: ASCII,
+  spaces (`open probe spaces`), and Unicode (`Projeto Ç\Project One`)
+  paths each exit 0 with structured project JSON (`id`/`name`/`dir`,
+  Unicode preserved byte-exact); single instance kept (5 procs), DAPI
+  listening. Registry `diffusion://` entry re-verified post-reinstall
+  (`URL:diffusion` → versioned exe `%1`).
 - `dapi mcp` cold background launch (throwaway `C:\tmp\mcp-stdio-probe.cjs`,
   kept out of the repo): app quit, proxy spawned with a real MCP handshake
   — server `diffusion 0.205.2`, 18 tools enumerated, mid-session state 7
