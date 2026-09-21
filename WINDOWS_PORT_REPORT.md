@@ -2,9 +2,10 @@
 
 Branch `feat/windows-parity`. Status as of 2026-09-21: all Windows
 infrastructure, packaging, and no-login acceptance is implemented and verified
-on the real machine. The authenticated end-to-end (embedded Codex editing a
-real project through login-gated renderer tools) is blocked on a Diffusion
-login the agent cannot perform itself — see E2E.
+on the real machine. The user then logged into Diffusion Studio and the full
+authenticated `dapi` pipeline (open/context/check/capture/export/probe) went
+green on the installed build. Remaining: the user-operated embedded-Codex
+chat session, human+agent continuity, and the E2E video — see E2E.
 
 ## UPSTREAM
 
@@ -26,7 +27,11 @@ login the agent cannot perform itself — see E2E.
 - Electron: 43.1.1 (packaged runtime reports Node v24.18.0)
 - esbuild (staged): 0.28.1, `@esbuild/win32-x64`
 - Codex: `C:\Users\PC TRABALHO\AppData\Local\Programs\OpenAI\Codex\bin\codex.exe`,
-  `codex-cli 0.155.0`, account `ready`, 5 live models
+  `codex-cli 0.155.0`, account `ready`, 5 live models;
+  `codex login status` → `Logged in using ChatGPT` (subscription auth
+  present for the embedded chat)
+- Diffusion login: user-signed-in during the session (`dapi whoami` →
+  authenticated user object; email redacted from this report)
 - Claude Code: not installed on this machine (`Get-Command claude` empty) —
   NOT TESTED DUE TO EXTERNAL ENVIRONMENT
 
@@ -206,14 +211,37 @@ Real desktop / installed-app tests (all on the installed build at
   disconnect/connect cycle behaved identically; the file was restored
   byte-exact (sha prefix `bb3248771b1ebded` before and after, `fc /b`
   clean). Only booleans/counts/hashes were printed — never contents.
+- Authenticated `dapi` core on the installed build (after user login),
+  project `%USERPROFILE%\Videos\Diffusion Studio\silent-sunset-20-sep`
+  (1080p scene `vqq59t`, 8 s, AVC+AAC asset): `whoami` authenticated;
+  `open` → structured project JSON; `context` → live state JSON;
+  `check vqq59t` → `{"issues":[]}` exit 0; `capture` at 0/2/4/6 s into a
+  spaced path → 3.2 MB contact sheet, probed 2576x1298 PNG; `export`
+  to a spaced path → 12.7 MB MP4, config AVC 1080p + AAC; `media probe`
+  of the MP4 → `avc1.640032` 2156x1080 + AAC 48 kHz stereo, 8 s, 200
+  packets per track; `models` (15 entries) / `voices` (23 entries) /
+  `logs` (export progress + `Export complete`) / `screenshot`
+  (1184x735) all structured and live.
+- Full uninstall/reinstall cycle on the installed build: `Update.exe
+  --uninstall` removed the Start Menu shortcut, left 0 app processes,
+  preserved `%APPDATA%\Diffusion Studio` and `Videos\` projects, and
+  wiped `bin/` (user-PATH entry left dangling — restored by self-heal
+  on the next app start, verified). Residue: the empty `app-0.205.2`
+  dir kept 2 Squirrel leftovers, and the HKCU `diffusion://` key kept
+  pointing at the removed exe (dangling until reinstall; recorded in
+  KNOWN LIMITATIONS). Reinstall from the same 07:33 Setup.exe restored
+  shortcut, protocol target, `bin/` self-heal, and a healthy DAPI —
+  the full §24 install→uninstall→reinstall loop is green.
 
 ## EMBEDDED CHAT
 
 - Discovery: REAL-WORLD-TESTED — `codex.exe` found via product
   `resolveBinary`, version 0.155.0 (≥ min 0.100.0).
 - Auth: REAL-WORLD-TESTED at the harness level — `account/read`
-  reports an account, probe status `ready` with the existing login. The
-  renderer "ready" badge itself is NOT TESTED (needs login-gated UI).
+  reports an account, probe status `ready` with the existing login, and
+  `codex login status` confirms `Logged in using ChatGPT`. The renderer
+  "ready" badge and the in-app chat session itself are NOT TESTED yet —
+  the user is running the §31 prompt in the embedded chat next.
 - Models: REAL-WORLD-TESTED — live `model/list` (5 models, default
   `gpt-5.6-sol`), distinguished from the static fallback.
 - Streaming / attachments / questions / interrupt / persistence / resume /
@@ -232,15 +260,19 @@ Real desktop / installed-app tests (all on the installed build at
   (`menu.test.ts`); reachable in the installed build.
 - Project storage: CRUD + OneDrive short-name handling covered by
   `projects.crud.test.ts` / `projects.init.test.ts`; watcher suite passes
-  (11/11, long TEMP). UI-level create/open/rename with spaces/Unicode
-  paths needs the login-gated dashboard — NOT REAL-WORLD-TESTED.
+  (11/11, long TEMP). `dapi open` on spaced/Unicode/real project paths is
+  REAL-WORLD-TESTED (structured JSON, app scaffolded `E2E Codex` on open).
+  UI-level create/rename/duplicate/delete still NOT REAL-WORLD-TESTED.
 - Bidirectional code↔canvas, timeline, inspector, asset library:
-  IMPLEMENTED (upstream), NOT REAL-WORLD-TESTED (login wall).
+  IMPLEMENTED (upstream), NOT REAL-WORLD-TESTED (needs hands-on UI).
 - Fonts: REAL-WORLD-TESTED via `dapi fonts` (see TESTS).
-- Media tools: REAL-WORLD-TESTED (`probe/grab/filmstrip/waveform`);
-  `transcribe/listen` not exercised (credit cost, no login).
-- Export/encoder: NOT REAL-WORLD-TESTED (login wall). No codec fallback
-  was copied; capability checks are unchanged upstream code.
+- Media tools: REAL-WORLD-TESTED (`probe/grab/filmstrip/waveform`,
+  grab re-verified authenticated for E2E assets);
+  `transcribe/listen` not exercised (awaiting user credit approval).
+- Export/encoder: REAL-WORLD-TESTED via `dapi export` on the installed
+  build — 12.7 MB MP4, AVC 2156x1080 + AAC stereo, probed track-clean
+  (see TESTS). No codec fallback was copied; capability checks are
+  unchanged upstream code. UI export-panel path still untested.
 
 ## PACKAGING
 
@@ -262,44 +294,50 @@ Real desktop / installed-app tests (all on the installed build at
 - `dapi` install behavior: user-PATH `...\DiffusionStudio\bin` entry,
   stable two-file launcher, full acceptance green (see TESTS).
 - Deep-link behavior: registered and routed (see TESTS).
-- Uninstall: Squirrel uninstall entry present; `dapi` uninstall removes
-  only owned files/entries (verified live). Full app uninstall was not
-  executed (would destroy the test install) — uninstall-entry presence
-  verified instead.
+- Uninstall: full `Update.exe --uninstall` executed live — shortcut
+  removed, 0 processes, user data and projects preserved, `bin/`
+  wiped (PATH self-healed on next start); residues documented in TESTS
+  / KNOWN LIMITATIONS. `dapi` uninstall removes only owned
+  files/entries (verified live, twice). Reinstall from the same
+  Setup.exe fully restored the install (see TESTS).
 - Updates: compatible by construction (Squirrel versioned layout,
   official feed untouched); no live update performed (would require
   official release assets).
 
 ## E2E
 
-BLOCKED ON DIFFUSION LOGIN — the installed app sits at the sign-in screen
-(`dapi whoami` → `{"user":null}`, screenshot 1184x735 on file at
-`C:\Users\PCTRAB~1\AppData\Local\Temp\shot-login-wall.png\`). The agent
-cannot enter the user's Google/GitHub credentials.
+LOGIN DONE — the user signed into Diffusion Studio and the whole
+`dapi`-level pipeline it gates is green (see TESTS: open/context/check/
+capture/export/probe on `silent-sunset-20-sep`, MP4 track-clean). What
+remains is the part the agent cannot operate itself: the in-app UI.
 
-- Project directory: (to be created after login)
+- Project directory:
+  `%USERPROFILE%\Videos\Diffusion Studio Test\E2E Codex`
+  (scaffolded by the app on `dapi open`; assets `02s.png` + `clip.mp4`
+  staged, prompt handed to the user)
 - Prompt: §31 composition prompt (12 s, 1920x1080, background + title +
   clip + caption + motion, capture/check/fix/export loop)
-- Capture paths / check result / exported MP4 / probe: PENDING LOGIN
-- Human+agent continuity (§19): PENDING LOGIN
-- E2E video: PENDING LOGIN
-
-Everything that can be verified without login is green above; the moment a
-login session exists, the remaining gate is purely mechanical (the tools,
-chat harness, and compile pipeline it exercises are already proven).
+- Embedded-chat run (streaming, MCP `context/capture/check/export` from
+  chat, agent-edited source, chat-exported MP4): AWAITING USER RUN
+- Human+agent continuity (§19): PENDING (right after the chat run)
+- E2E video: PENDING (after continuity)
 
 ## KNOWN LIMITATIONS
 
-- Authenticated E2E (capture/check/export, embedded-chat editing,
-  bidirectional persistence, MP4, continuity, video): blocked on user
-  login, not on code.
+- Embedded-chat E2E (in-app Codex session, continuity, video):
+  awaits the user-operated chat run, not code.
+- Squirrel uninstall leaves the HKCU `diffusion://` registration
+  pointing at the removed exe until reinstall (upstream registers the
+  protocol at runtime without an uninstall hook; same gap exists on
+  macOS conceptually). Minor: 2 Squirrel leftovers stay in the emptied
+  version dir.
 - `npm run check`: one pre-existing upstream type error
   (`showSaveFilePicker`) fails 3 untouched workspaces.
 - `npm run test`: upstream watcher suite aborts under 8.3 short-name
   TMPDIR on this machine (passes 11/11 with long TEMP); untouched files.
 - Machine runs Node 26 while the mission/CI baseline is Node 20.
 - Claude Code chat untested (not installed). `transcribe`/`listen`
-  untested (credits + login). Full app uninstall not executed (by design).
+  untested (awaiting user credit approval).
 - Web download CTA untouched (§26): no fake Windows release URL added.
 
 ## FEATURE MATRIX
@@ -320,21 +358,21 @@ chat harness, and compile pipeline it exercises are already proven).
 | window chrome | hiddenInset/vibrancy | native frame | `window-chrome.test` | live screenshot 1184x735 | PASS | |
 | menu | mac menu | Windows menu, no mac roles | `menu.test` | installed build | PASS | |
 | deep-link | diffusion:// | registry + single-instance + pending | `deep-link.test` | full matrix (prior) | PASS | synthetic callbacks only |
-| projects CRUD | Videos root | same + 8.3 OneDrive fix | crud/init tests | — | PARTIAL | UI-level pending login |
+| projects CRUD | Videos root | same + 8.3 OneDrive fix | crud/init tests | `dapi open` spaced/Unicode/real paths | PARTIAL | UI CRUD untested |
 | watcher | fs watch | unchanged | 11/11 (long TEMP) | — | PASS* | *aborts under 8.3 TMPDIR (upstream, env-only) |
 | packaged compile | staged runtime | win32-x64 runtime verified | — | 6/6 probe on installed Electron | PASS | UI recompile pending login |
 | bidirectional edit | code↔canvas | unchanged | `edit.test` | — | NOT TESTED | login wall |
 | fonts | JXA/NSFont | `fonts-win.ts` registry adapter | 22 + 6 green | hundreds of families live | PASS | |
 | media probe/grab/film/wave | — | unchanged | — | fixtures (prior) | PASS | |
-| transcribe/listen | — | unchanged | — | — | NOT TESTED | credits + login |
-| capture/check/export | renderer IPC | unchanged | — | — | NOT TESTED | login wall |
-| whoami/voices/logs/context/shot | — | unchanged | — | all live, structured | PASS | whoami null = logged out |
+| transcribe/listen | — | unchanged | — | — | NOT TESTED | awaiting credit approval |
+| capture/check/export | renderer IPC | unchanged | — | check clean, 3.2MB sheet, 12.7MB MP4 probed | PASS | via dapi on installed build |
+| whoami/voices/logs/context/shot | — | unchanged | — | all live, structured, authenticated | PASS | |
 | report | gh filing | unchanged + win resolution | `report.test` 7 green | unit only (by design) | PASS | |
 | installer | DMG | Squirrel Setup.exe 158 MB | `packaging.test` | installed + reopened | PASS | unsigned; SmartScreen expected |
-| uninstall | — | Squirrel entry + owned-files CLI removal | fixture tests | CLI cycle live; app uninstall not run | PARTIAL | by design |
+| uninstall | — | Squirrel entry + owned-files CLI removal | fixture tests | full uninstall+reinstall live | PASS | protocol key residue noted |
 | updates | update-electron-app | feed untouched, safe w/o metadata | — | starts clean, no error loop | PASS | no live update (no official assets) |
 | CI | mac release | `windows.yml` validate+package, Node 20 | — | check/lint/test/build run locally | PASS | GitHub run not triggered from here |
-| E2E video edit+export | — | — | — | — | BLOCKED | needs Diffusion login |
+| E2E video edit+export | — | — | — | dapi pipeline green; chat run pending | PARTIAL | awaiting user chat run |
 
 Final SHA for this report: `6c3707e` + this update (committed as
-`docs: record stale-build diagnosis, mcp cold proof, self-heal`).
+`docs: record authenticated pipeline, uninstall cycle, E2E staging`).
