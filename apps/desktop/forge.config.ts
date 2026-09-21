@@ -44,7 +44,9 @@ const config: ForgeConfig = {
   makers: [
     new MakerSquirrel(
       {
-        name: 'Diffusion Studio',
+        // NuGet-safe ID: becomes the install dir and package ID; the human-
+        // readable shortcut title still comes from packagerConfig.name.
+        name: 'DiffusionStudio',
         authors: 'Diffusion Studio',
         description: 'Agentic video editing',
         setupIcon: './assets/icon.ico',

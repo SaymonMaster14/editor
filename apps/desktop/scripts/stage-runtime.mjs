@@ -41,15 +41,38 @@ mkdirSync(stageDir, { recursive: true });
 
 writeFileSync(
   join(stageDir, "package.json"),
-  JSON.stringify({ name: "desktop-runtime", private: true, dependencies }, null, 2),
+  // allowScripts keeps esbuild's postinstall running even on machines whose npm
+  // config gates install scripts: without the real binary at esbuild/bin the
+  // staged runtime would differ from upstream's macOS staging.
+  JSON.stringify(
+    { name: "desktop-runtime", private: true, dependencies, allowScripts: { esbuild: true } },
+    null,
+    2,
+  ),
 );
 
-// On Windows npm is a .cmd shim, which execFileSync cannot launch directly.
-const npmExec = process.platform === "win32" ? "npm.cmd" : "npm";
-execFileSync(npmExec, ["install", "--omit=dev", "--no-audit", "--no-fund", "--no-package-lock"], {
-  cwd: stageDir,
-  stdio: "inherit",
-});
+// On Windows npm is a .cmd shim, which only runs under an interpreter.
+const npmCmd = ["install", "--omit=dev", "--no-audit", "--no-fund", "--no-package-lock"];
+// A nested npm must not inherit the outer run's config: npm exposes it as
+// npm_config_* env vars, which the child parses as flags (e.g. a stale
+// allow-scripts value fails the install with EALLOWSCRIPTS). The staged
+// dependencies are all public, so a default config is correct.
+const npmEnv = Object.fromEntries(
+  Object.entries(process.env).filter(([key]) => !key.startsWith("npm_config_")),
+);
+if (process.platform === "win32") {
+  execFileSync("cmd.exe", ["/d", "/s", "/c", "npm", ...npmCmd], {
+    cwd: stageDir,
+    stdio: "inherit",
+    env: npmEnv,
+  });
+} else {
+  execFileSync("npm", npmCmd, {
+    cwd: stageDir,
+    stdio: "inherit",
+    env: npmEnv,
+  });
+}
 
 // Mach-O files inside Resources are not reached by the app-bundle signing
 // pass, and notarization rejects unsigned executables; sign them here.

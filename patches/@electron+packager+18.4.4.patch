@@ -1,0 +1,17 @@
+diff --git a/node_modules/@electron/packager/dist/unzip.js b/node_modules/@electron/packager/dist/unzip.js
+index d37e170..4d2648a 100644
+--- a/node_modules/@electron/packager/dist/unzip.js
++++ b/node_modules/@electron/packager/dist/unzip.js
+@@ -4,7 +4,11 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
+ };
+ Object.defineProperty(exports, "__esModule", { value: true });
+ exports.extractElectronZip = void 0;
+-const extract_zip_1 = __importDefault(require("extract-zip"));
++// Patched (see patches/@electron+packager+18.4.4.patch): Electron's maintained
++// native fork. extract-zip's yauzl/fd-slicer streaming pipeline wedges
++// silently on modern Node (no data, no error, the event loop just drains),
++// which aborts packaging with a fake exit 0 and no output.
++const extract_zip_1 = __importDefault(require("@electron-internal/extract-zip"));
+ async function extractElectronZip(zipPath, targetDir) {
+     await (0, extract_zip_1.default)(zipPath, { dir: targetDir });
+ }
