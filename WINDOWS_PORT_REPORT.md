@@ -227,7 +227,7 @@ Real desktop / installed-app tests (all on the installed build at
   (the GUI-app case), uppercase `PATH` (npm), mixed-case `PathExt`,
   and lowercase overrides. Proven to fail without the fix (7 failed
   on stashed source, 2 behavior-neutral passed); full agent-chat
-  suite 45/45, `tsc --noEmit` clean.
+  suite 45/45, `tsc --noEmit` clean. GUI-like replication (plain `node`, env holding only `Path`): pre-fix `resolveBinary(codex)` gives null, fixed gives the installed `codex.exe` path.
 - Authenticated `dapi` core on the installed build (after user login),
   project `%USERPROFILE%\Videos\Diffusion Studio\silent-sunset-20-sep`
   (1080p scene `vqq59t`, 8 s, AVC+AAC asset): `whoami` authenticated;
