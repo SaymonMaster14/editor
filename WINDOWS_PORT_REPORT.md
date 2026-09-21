@@ -12,6 +12,8 @@ all independently verified (see E2E). Human+agent continuity (§19) then
 went green end to end, chat persistence across restart was confirmed,
 and app exit left zero orphan processes. This report is final.
 
+Built with Muse Spark 1.3 inside Muse Code.
+
 ## UPSTREAM
 
 - Upstream repo: https://github.com/diffusionstudio/editor
