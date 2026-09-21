@@ -2,8 +2,15 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
+import { spawn as spawnMock } from "node:child_process";
+import { EventEmitter } from "node:events";
 import { join } from "node:path";
 import { afterEach, describe, expect, test, vi } from "vitest";
+
+vi.mock("node:child_process", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("node:child_process")>();
+  return { ...actual, spawn: vi.fn() };
+});
 import {
   FAIL_WATCHDOG_MS,
   appError,
@@ -126,5 +133,56 @@ describe("launchApp", () => {
     } finally {
       process.env = realEnv;
     }
+  });
+
+  function mockSpawn(outcome: "spawn" | "error"): { spawn: ReturnType<typeof vi.fn>; unref: ReturnType<typeof vi.fn> } {
+    const child = new EventEmitter() as EventEmitter & { unref: ReturnType<typeof vi.fn> };
+    child.unref = vi.fn();
+    process.nextTick(() => child.emit(outcome, outcome === "error" ? new Error("ENOENT") : undefined));
+    const spawn = vi.mocked(spawnMock);
+    spawn.mockClear();
+    spawn.mockReturnValue(child as never);
+    return { spawn, unref: child.unref };
+  }
+
+  function withInstalledExe<T>(run: () => Promise<T>): Promise<T> {
+    // A real file so resolveWindowsExe accepts it; spawn itself is mocked.
+    const realEnv = process.env;
+    process.env = { ...realEnv, DIFFUSION_APP_PATH: process.execPath, ELECTRON_RUN_AS_NODE: "1" };
+    return run().finally(() => {
+      process.env = realEnv;
+    });
+  }
+
+  test("spawns the GUI detached with ignored stdio and a sanitized env", async () => {
+    if (process.platform !== "win32") return;
+    const { spawn, unref } = mockSpawn("spawn");
+    await withInstalledExe(async () => {
+      await expect(launchApp(false)).resolves.toBe(true);
+    });
+    expect(spawn).toHaveBeenCalledTimes(1);
+    const [exe, args, options] = spawn.mock.calls[0] as [string, string[], Record<string, unknown>];
+    expect(exe).toBe(process.execPath);
+    expect(args).toEqual([]);
+    // Piped stdio would be inherited by the Squirrel stub's re-exec chain and
+    // keep this CLI (and any upstream pipe consumer) from ever draining.
+    expect(options.detached).toBe(true);
+    expect(options.stdio).toBe("ignore");
+    // No windowsHide: a SW_HIDE show-state inherited by the first instance
+    // breaks its first second-instance delivery (later `dapi open` would not
+    // surface until attempted twice); --hidden argv is the hiding mechanism.
+    expect(options.windowsHide ?? false).toBe(false);
+    expect("ELECTRON_RUN_AS_NODE" in (options.env as object)).toBe(false);
+    expect(unref).toHaveBeenCalledTimes(1);
+  });
+
+  test("passes --hidden for background launch and reports spawn errors as false", async () => {
+    if (process.platform !== "win32") return;
+    const { spawn } = mockSpawn("error");
+    await withInstalledExe(async () => {
+      await expect(launchApp(true)).resolves.toBe(false);
+    });
+    const [, args] = spawn.mock.calls[0] as [string, string[]];
+    expect(args).toEqual(["--hidden"]);
   });
 });

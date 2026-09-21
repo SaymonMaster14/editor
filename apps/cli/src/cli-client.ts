@@ -2,7 +2,7 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-import { execFile } from "node:child_process";
+import { execFile, spawn } from "node:child_process";
 import { statSync } from "node:fs";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
@@ -153,9 +153,28 @@ export function launchApp(background: boolean): Promise<boolean> {
   if (process.platform === "win32") {
     const exe = resolveWindowsExe();
     if (!exe) return Promise.resolve(false);
-    // Single instance stays in charge: a running app just gets focused.
+    // Single instance stays in charge: a running app just gets focused. The
+    // launch must be fully detached with no stdio pipes: the Squirrel stub
+    // re-execs into Update/app processes that inherit pipe handles, and any
+    // inherited pipe keeps this CLI (and any upstream pipe consumer) from
+    // ever draining — `dapi open` would hang until the app exits.
+    // Deliberately no windowsHide: hidden-ness comes from the --hidden argv
+    // alone, and a SW_HIDE show-state inherited by the first instance breaks
+    // its first second-instance delivery — a later `dapi open` would not
+    // surface the window until attempted twice.
     const args = background ? ["--hidden"] : [];
-    return new Promise((res) => execFile(exe, args, { env: guiEnv(process.env), windowsHide: true }, (err) => res(!err)));
+    return new Promise((res) => {
+      const child = spawn(exe, args, {
+        env: guiEnv(process.env),
+        detached: true,
+        stdio: "ignore",
+      });
+      child.on("error", () => res(false));
+      child.on("spawn", () => {
+        child.unref();
+        res(true);
+      });
+    });
   }
   if (process.platform !== "darwin") return Promise.resolve(false);
   const args = background ? ["-g", "-a", APP_NAME, "--args", "--hidden"] : ["-a", APP_NAME];
