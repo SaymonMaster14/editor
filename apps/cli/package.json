@@ -7,10 +7,10 @@
     "dapi": "./dist/index.js"
   },
   "scripts": {
-    "build": "esbuild src/index.ts --bundle --platform=node --format=cjs --outfile=dist/index.js && chmod +x dist/index.js",
+    "build": "node scripts/build.mjs",
     "check": "tsc --noEmit",
-    "symlink:remove": "rm -f /opt/homebrew/bin/dapi",
-    "symlink:create": "npm run build && ln -sf \"$PWD/dist/index.js\" /opt/homebrew/bin/dapi"
+    "symlink:remove": "node scripts/dev-link.mjs --remove",
+    "symlink:create": "npm run build && node scripts/dev-link.mjs"
   },
   "dependencies": {
     "@diffusionstudio/dapi": "*",
