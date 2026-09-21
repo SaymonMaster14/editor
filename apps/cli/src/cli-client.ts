@@ -14,6 +14,40 @@ import type { ToolInput, ToolName, ToolOutput } from "@diffusionstudio/dapi";
 
 export const APP_NAME = "Diffusion Studio";
 
+// How long fail() waits for something else holding the loop (the stdio proxy)
+// before forcing the exit. The common case exits far earlier, by drain.
+export const FAIL_WATCHDOG_MS = 1000;
+
+/**
+ * Usage failures before any MCP session exists (argv validation): nothing is
+ * in flight, so exiting now is safe. Only for synchronous pre-connection
+ * paths — anywhere past connect() must use fail().
+ */
+export function failSync(message: string): never {
+  console.error(message);
+  process.exit(1);
+}
+
+/**
+ * Failures at or after an MCP session: report and park until the loop drains
+ * instead of calling process.exit(). The MCP client's close() leaves async
+ * teardown unsettled, and an immediate exit races it — on Windows that race
+ * hard-aborts the process (uv_async_send on a closing handle). The watchdog
+ * only fires when something else legitimately holds the loop open.
+ */
+export function fail(message: string): Promise<never> {
+  console.error(message);
+  process.exitCode = 1;
+  setTimeout(() => process.exit(1), FAIL_WATCHDOG_MS).unref();
+  return new Promise<never>(() => {});
+}
+
+/** Tool-call rejection funnel: app-down gets its hint, everything else its message. */
+export function appError(e: unknown): Promise<never> {
+  if (isAppDown(e)) return fail(`${APP_NAME} is not running. Launch the app first, then retry.`);
+  return fail((e as Error).message);
+}
+
 // Renders and AI generation outlive the 60s default.
 const TIMEOUTS: Record<string, number> = {
   export: 3_600_000,

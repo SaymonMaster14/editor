@@ -3,8 +3,23 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 import { join } from "node:path";
-import { describe, expect, test } from "vitest";
-import { guiEnv, isAppDown, launchApp, resolveWindowsExe } from "./cli-client";
+import { afterEach, describe, expect, test, vi } from "vitest";
+import {
+  FAIL_WATCHDOG_MS,
+  appError,
+  fail,
+  failSync,
+  guiEnv,
+  isAppDown,
+  launchApp,
+  resolveWindowsExe,
+} from "./cli-client";
+
+afterEach(() => {
+  vi.useRealTimers();
+  vi.restoreAllMocks();
+  process.exitCode = undefined;
+});
 
 describe("guiEnv", () => {
   test("strips the node-mode flag and keeps everything else", () => {
@@ -41,6 +56,61 @@ describe("isAppDown", () => {
     expect(isAppDown({ cause: { cause: { code: "ECONNRESET" } } })).toBe(true);
     expect(isAppDown(new Error("boom"))).toBe(false);
     expect(isAppDown(null)).toBe(false);
+  });
+});
+
+describe("failSync", () => {
+  test("reports and exits synchronously for pre-connection usage errors", () => {
+    const err = vi.spyOn(console, "error").mockImplementation(() => {});
+    const exit = vi.spyOn(process, "exit").mockImplementation((() => {
+      throw new Error("exited");
+    }) as never);
+    expect(() => failSync("File not found: C:\\gone.mp4")).toThrow("exited");
+    expect(err).toHaveBeenCalledWith("File not found: C:\\gone.mp4");
+    expect(exit).toHaveBeenCalledWith(1);
+  });
+});
+
+describe("fail", () => {
+  test("reports, arms exit code 1, and never exits synchronously", async () => {
+    vi.useFakeTimers();
+    const err = vi.spyOn(console, "error").mockImplementation(() => {});
+    const exit = vi.spyOn(process, "exit").mockImplementation((() => undefined) as never);
+    const race = Promise.race([
+      fail("No project open").then(() => "settled"),
+      new Promise((r) => setTimeout(() => r("parked"), 20)),
+    ]);
+    await vi.advanceTimersByTimeAsync(20);
+    expect(err).toHaveBeenCalledWith("No project open");
+    expect(process.exitCode).toBe(1);
+    expect(exit).not.toHaveBeenCalled();
+    await expect(race).resolves.toBe("parked");
+  });
+
+  test("forces the exit when the loop stays alive past the watchdog", () => {
+    vi.useFakeTimers();
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const exit = vi.spyOn(process, "exit").mockImplementation((() => undefined) as never);
+    void fail("boom");
+    expect(exit).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(FAIL_WATCHDOG_MS);
+    expect(exit).toHaveBeenCalledWith(1);
+  });
+});
+
+describe("appError", () => {
+  test("maps app-down to the launch hint and other errors to their message", async () => {
+    vi.useFakeTimers();
+    const err = vi.spyOn(console, "error").mockImplementation(() => {});
+    vi.spyOn(process, "exit").mockImplementation((() => undefined) as never);
+    const down = new Error("x", { cause: { code: "ECONNREFUSED" } });
+    void appError(down).catch(() => {});
+    void appError(new Error("kaboom")).catch(() => {});
+    // Both park; flush the synchronous reporting.
+    await Promise.resolve();
+    expect(err).toHaveBeenCalledWith("Diffusion Studio is not running. Launch the app first, then retry.");
+    expect(err).toHaveBeenCalledWith("kaboom");
+    expect(process.exitCode).toBe(1);
   });
 });
 

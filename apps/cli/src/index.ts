@@ -9,20 +9,10 @@ import { Command } from "commander";
 import { z } from "zod";
 import { version } from "../../../package.json";
 import { MCP_URL, toolByName } from "@diffusionstudio/dapi";
-import { APP_NAME, call, isAppDown, launchApp, ping, waitForApp } from "./cli-client";
+import { APP_NAME, appError, call, fail, failSync, launchApp, ping, waitForApp } from "./cli-client";
 import { runProxy } from "./mcp-proxy";
 
 import type { GenericTool, ToolInput, ToolName } from "@diffusionstudio/dapi";
-
-function fail(message: string): never {
-  console.error(message);
-  process.exit(1);
-}
-
-function appError(e: unknown): never {
-  if (isAppDown(e)) fail(`${APP_NAME} is not running. Launch the app first, then retry.`);
-  fail((e as Error).message);
-}
 
 /** The tool's description, verbatim. */
 function describe(name: ToolName): string {
@@ -45,7 +35,7 @@ function field(name: ToolName, key: string): string {
  */
 async function run<N extends ToolName>(name: N, input: ToolInput<N>): Promise<void> {
   const parsed = toolByName(name).input.safeParse(input);
-  if (!parsed.success) fail(z.prettifyError(parsed.error));
+  if (!parsed.success) return fail(z.prettifyError(parsed.error));
   const output = await call(name, input).catch(appError);
   console.log(JSON.stringify(output));
 }
@@ -62,7 +52,7 @@ const numeric = (value: string): number => (value.trim() === "" ? NaN : Number(v
 function assetPath(ref: string): string {
   const abs = resolve(ref);
   if (existsSync(abs)) return abs;
-  if (isAbsolute(ref)) fail(`File not found: ${abs}`);
+  if (isAbsolute(ref)) failSync(`File not found: ${abs}`);
   return ref;
 }
 
