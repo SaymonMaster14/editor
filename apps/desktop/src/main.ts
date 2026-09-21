@@ -17,6 +17,8 @@ import { applyMcp, healMcpRegistrations, mcpStatus } from "./mcp-install";
 import { enableHeadless } from "./headless";
 import { trackEvent, trackInstall } from "./analytics";
 import { setupAppMenu } from "./menu";
+import { AUTH_PROTOCOL, deepLinkChannel, findProtocolUrl, isHiddenLaunch } from "./deep-link";
+import { chromeOptions } from "./window-chrome";
 import { mainBridge } from "./main-manager";
 import { MAIN_CHANNELS } from "./main-channels";
 import {
@@ -51,7 +53,6 @@ import type { DeepLinkChannel } from "./main-channels";
 import type { LogEntry } from "@diffusionstudio/dapi";
 
 const DEV_URL = "http://localhost:5173";
-const AUTH_PROTOCOL = "diffusion";
 const MACOS_CORNER_RADIUS = 18;
 const MACOS_BACKDROP = { blur: 80, red: 0.07, green: 0.07, blue: 0.07, alpha: 0.9 };
 
@@ -138,28 +139,6 @@ function captureConsole(window: BrowserWindow) {
   });
 }
 
-function findProtocolUrl(argv: string[]): string | null {
-  return argv.find((arg) => arg.startsWith(`${AUTH_PROTOCOL}://`)) ?? null;
-}
-
-function isHiddenLaunch(argv: string[]): boolean {
-  return argv.includes("--hidden");
-}
-
-// diffusion://auth/callback → auth, diffusion://checkout/callback → checkout.
-function deepLinkChannel(url: string): DeepLinkChannel | null {
-  let host: string;
-  try {
-    host = new URL(url).hostname;
-  } catch {
-    return null;
-  }
-
-  if (host === "auth") return MAIN_CHANNELS.AUTH_CALLBACK;
-  if (host === "checkout") return MAIN_CHANNELS.CHECKOUT_CALLBACK;
-  return null;
-}
-
 function deliverDeepLink(url: string) {
   const channel = deepLinkChannel(url);
   if (!channel) return;
@@ -205,11 +184,7 @@ function createWindow(show = true) {
     show: false,
     width: 1200,
     height: 800,
-    titleBarStyle: "hiddenInset",
-    trafficLightPosition: { x: 14, y: 14 },
-    ...(process.platform === "darwin"
-      ? { vibrancy: "sidebar" as const, backgroundColor: "#00000000" }
-      : { backgroundColor: "#1c1c1c" }),
+    ...chromeOptions(process.platform),
     webPreferences: {
       preload: join(app.getAppPath(), "dist", "preload.js"),
     },
