@@ -260,14 +260,19 @@ Real desktop / installed-app tests (all on the installed build at
   reports an account, probe status `ready` with the existing login, and
   `codex login status` confirms `Logged in using ChatGPT`. The renderer
   "ready" badge and the in-app chat session itself are NOT TESTED yet —
-  the picker re-test + §31 chat run are the next user step (fix installed 08:10).
+  the picker now lists Codex and a full chat session ran to completion
+  (08:33 screenshot: GPT-5.6-Luna, tool calls + Thinking rendered).
 - Models: REAL-WORLD-TESTED — live `model/list` (5 models, default
-  `gpt-5.6-sol`), distinguished from the static fallback.
-- Streaming / attachments / questions / interrupt / persistence / resume /
-  MCP calls from chat / process cleanup after chat teardown: IMPLEMENTED
-  (upstream, preserved), NOT REAL-WORLD-TESTED — all require the
-  login-gated editor session. Probe-level cleanup verified (no orphan
-  `codex` after probe).
+  `gpt-5.6-sol`), distinguished from the static fallback; the UI
+  session ran GPT-5.6-Luna from the live list.
+- Streaming / reasoning / command+file activity / MCP calls from chat
+  (`media_probe`, capture, check, export) / second-turn continuity:
+  REAL-WORLD-TESTED in the §31 run (transcript + verified artifacts).
+  Attachments / question cards / interrupt / navigate-away /
+  restart persistence+resume / teardown cleanup: IMPLEMENTED (upstream)
+  but NOT REAL-WORLD-TESTED yet — persistence + no-orphan-after-exit
+  are queued for the end of this session; interrupt/attachments/cards
+  need dedicated UI turns.
 - Claude chat: NOT TESTED DUE TO EXTERNAL ENVIRONMENT (not installed).
 
 ## EDITOR
