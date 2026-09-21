@@ -117,13 +117,29 @@ function isExecutable(path: string): boolean {
 }
 
 /**
+ * Case-insensitive read of the copied env. `process.env` answers
+ * case-insensitively on Windows, but this copy keeps the OS key casing
+ * (`Path`, not `PATH`), so a direct property read misses on a real
+ * GUI-launched app while working under npm (which injects uppercase PATH).
+ */
+export function envGet(env: Record<string, string>, key: string): string | undefined {
+  if (env[key] !== undefined) return env[key];
+  if (!IS_WINDOWS) return undefined;
+  const want = key.toLowerCase();
+  for (const [candidate, value] of Object.entries(env)) {
+    if (candidate.toLowerCase() === want) return value;
+  }
+  return undefined;
+}
+
+/**
  * `which`, over the hydrated PATH and then the known install dirs. On Windows
  * the PATHEXT variants are tried, so `claude.cmd` and `codex.exe` are found.
  */
 export function which(name: string, host: HostEnv): string | null {
-  const dirs = [...(host.env.PATH ?? "").split(delimiter).filter(Boolean), ...host.extraDirs];
+  const dirs = [...(envGet(host.env, "PATH") ?? "").split(delimiter).filter(Boolean), ...host.extraDirs];
   const names = IS_WINDOWS
-    ? [name, ...(host.env.PATHEXT ?? ".EXE;.CMD;.BAT").split(";").map((ext) => name + ext.toLowerCase())]
+    ? [name, ...(envGet(host.env, "PATHEXT") ?? ".EXE;.CMD;.BAT").split(";").map((ext) => name + ext.toLowerCase())]
     : [name];
   for (const dir of dirs) {
     for (const candidate of names) {
@@ -139,7 +155,8 @@ export function which(name: string, host: HostEnv): string | null {
  * `DIFFUSION_CODEX_PATH`), else `which`.
  */
 export function resolveBinary(name: "claude" | "codex", host: HostEnv): string | null {
-  const override = host.env[`DIFFUSION_${name.toUpperCase()}_PATH`] ?? process.env[`DIFFUSION_${name.toUpperCase()}_PATH`];
+  const overrideKey = `DIFFUSION_${name.toUpperCase()}_PATH`;
+  const override = envGet(host.env, overrideKey) ?? process.env[overrideKey];
   if (override && isExecutable(override)) return override;
   return which(name, host);
 }
