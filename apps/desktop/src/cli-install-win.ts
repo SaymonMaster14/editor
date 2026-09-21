@@ -176,7 +176,14 @@ export function realWinCliEnv(isPackaged: boolean, resourcesPath: string): WinCl
     },
     whereDapi: () => {
       try {
-        const out = execFileSync("where", ["dapi"], { encoding: "utf8", windowsHide: true, timeout: 15000 });
+        // `where` exits 1 with a "not found" notice when no dapi exists —
+        // the normal case. Keep stdout piped for parsing, silence the rest.
+        const out = execFileSync("where", ["dapi"], {
+          encoding: "utf8",
+          windowsHide: true,
+          timeout: 15000,
+          stdio: ["ignore", "pipe", "ignore"],
+        });
         return out
           .split(/\r?\n/)
           .map((line) => line.trim())
