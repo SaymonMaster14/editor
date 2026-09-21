@@ -11,6 +11,7 @@ import { hydrateEnv } from "./env";
 import { AgentHost } from "./host";
 import { ClaudeHarness } from "./claude";
 import { CodexHarness } from "./codex";
+import { MuseHarness } from "./muse";
 import { OpenCodeHarness } from "./opencode";
 import { DEFAULT_ORIGINS, startServer } from "./server";
 import { ChatStore } from "./store";
@@ -52,7 +53,7 @@ export async function createAgentHost(config: AgentHostConfig): Promise<RunningA
   const store = new ChatStore(config.dataDir);
   const agentHost = new AgentHost({
     store,
-    harnesses: config.harnesses ?? [new ClaudeHarness(), new CodexHarness(), new OpenCodeHarness()],
+    harnesses: config.harnesses ?? [new ClaudeHarness(), new CodexHarness(), new OpenCodeHarness(), new MuseHarness()],
     env,
     mcp: config.mcp,
     instructions: config.instructions,
@@ -87,6 +88,7 @@ export { FakeHarness } from "./fake";
 export { ClaudeHarness } from "./claude";
 export { CodexHarness } from "./codex";
 export { OpenCodeHarness } from "./opencode";
+export { MuseHarness } from "./muse";
 export { hydrateEnv, inheritedEnv, which, resolveBinary, killTree } from "./env";
 export type { Harness, HarnessSession, McpConfig, ResumeCursor, OpenOptions } from "./harness";
 export type { HostEnv } from "./env";

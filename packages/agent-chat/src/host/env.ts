@@ -8,7 +8,7 @@
 // user's PATH. Children never see Electron's own variables.
 
 import { execFile, spawn } from "node:child_process";
-import { accessSync, constants, existsSync, readFileSync, statSync } from "node:fs";
+import { accessSync, constants, existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { homedir, userInfo } from "node:os";
 import { delimiter, dirname, join, resolve } from "node:path";
 
@@ -209,6 +209,34 @@ export function resolveOpencodeExecutable(path: string): string {
       const target = resolve(dir, match[1]!);
       if (existsSync(target)) return target;
     }
+  } catch {
+    // Fall through: spawning the shim is the fallback.
+  }
+  return path;
+}
+
+/**
+ * A `muse.cmd` shim on Windows runs a PowerShell launcher that checks for
+ * updates before execing the real binary — wrong for a long-lived stdio
+ * server, and its stdio passes through two extra layers. Follow it to the
+ * `muse-bin-<version>.exe` it wraps, via the `.muse-version` file beside the
+ * shim, else the newest matching exe. Anything else is returned as is.
+ */
+export function resolveMuseExecutable(path: string): string {
+  if (!IS_WINDOWS || !/\.(cmd|ps1)$/i.test(path)) return path;
+  const dir = dirname(path);
+  try {
+    const version = readFileSync(join(dir, ".muse-version"), "utf8").trim();
+    if (/^[A-Za-z0-9._-]+$/.test(version)) {
+      const pinned = join(dir, `muse-bin-${version}.exe`);
+      if (existsSync(pinned)) return pinned;
+    }
+  } catch {
+    // No version pin: fall through to the directory scan.
+  }
+  try {
+    const exes = readdirSync(dir).filter((name) => /^muse-bin-.*\.exe$/i.test(name)).sort();
+    if (exes.length > 0) return join(dir, exes[exes.length - 1]!);
   } catch {
     // Fall through: spawning the shim is the fallback.
   }
