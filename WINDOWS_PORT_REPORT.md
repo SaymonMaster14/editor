@@ -12,9 +12,9 @@ login the agent cannot perform itself — see E2E.
 - Baseline SHA (merge-base `main...HEAD`): `57c3983` (full:
   `57c39834bb3d2f116ce1d2c76cc8b881a279c2e6`)
 - Baseline version: 0.205.2
-- Final branch: `feat/windows-parity` (15 commits over baseline)
-- Final SHA: `be419ba` (full:
-  `be419bab6a4e30fe4892bb3bb3082817b4ae7e56`)
+- Final branch: `feat/windows-parity` (17 commits over baseline)
+- Final SHA: `6c3707e` (self-heal fix; report update committed on top as
+  described at the end of this file)
 
 ## ENVIRONMENT
 
@@ -102,6 +102,14 @@ Each item names the gap, the fix, and why that shape was chosen.
 12. No Windows CI. Added `.github/workflows/windows.yml` with separate
     validate (check/lint/test/build) and package (`make` + Setup.exe
     artifact) jobs on `windows-latest`, Node 20, no signing. (`33e7ed1`)
+13. A same-version Squirrel reinstall wipes the custom `bin/` launcher
+    while the user-PATH entry survives, leaving `dapi` dangling
+    (discovered by reinstalling during acceptance). Added
+    `winCliNeedsRepair` + `healCliInstall`, run at startup next to the
+    existing MCP heal: when the PATH entry proves a prior install but
+    the files are gone, the app silently recreates only the files it
+    owns. Never throws; dev builds and never-installed machines are
+    untouched. (`6c3707e`)
 
 macOS behavior was preserved throughout: darwin-gated chrome, JXA fonts,
 `/usr/local/bin` symlink flow, and DMG release workflow are untouched
@@ -144,6 +152,21 @@ Real desktop / installed-app tests (all on the installed build at
   (second uninstall → `absent`, second install → `installed`). Green twice.
 - `dapi open` with the app closed relaunched it (exit 0); DAPI listened on
   127.0.0.1:3274 only; `dapi models` returned structured JSON.
+- `dapi mcp` cold background launch (throwaway `C:\tmp\mcp-stdio-probe.cjs`,
+  kept out of the repo): app quit, proxy spawned with a real MCP handshake
+  — server `diffusion 0.205.2`, 18 tools enumerated, mid-session state 7
+  processes all `hwnd=0` (zero visible windows) with port listening, stdin
+  close → proxy exit 0. `MCP_STDIO_PROBE_OK` on the fresh build.
+- Stale-build lesson: the 01:01 installer predated the CLI fixes, and its
+  `dapi mcp` exited 0 silently ~5.6 s into a cold boot (old
+  execFile+windowsHide launch, pre-drain-safe shutdown). Bisected via
+  process-tree capture (stub→versioned-exe forwarding is normal Squirrel
+  behavior) and bundle grep (`shutdownArmed` absent). Fixed by rebuilding
+  from HEAD — never by changing code for the symptom. Installed bundles
+  are now verified fresh by marker grep before acceptance.
+- Reinstall self-heal, live: after reinstall wiped `bin/` (PATH dangling),
+  the first app start recreated both launcher files with zero user action;
+  `dapi --version` → `0.205.2` immediately after.
 - No-login DAPI matrix, each with structured output or a real file:
   `models`, `voices` (23 entries), `whoami` (`{"user":null}`, proving
   logged-out state), `logs` (`{"entries":[]}`), `context` (empty-state
@@ -217,7 +240,9 @@ Real desktop / installed-app tests (all on the installed build at
 
 - Setup.exe:
   `apps/desktop/out/make/squirrel.windows/x64/Diffusion Studio-0.205.2 Setup.exe`
-  (157,968,896 bytes, built 2026-09-21 01:01).
+  (157,968,896 bytes, final build 2026-09-21 07:33 from HEAD `6c3707e`;
+  an earlier 01:01 build predated the CLI fixes and was superseded after
+  the stale-bundle diagnosis above).
 - Installed to `%LOCALAPPDATA%\DiffusionStudio` (stable stub +
   `app-0.205.2` + `Update.exe`); installed app launches, reopens,
   preserves data across reinstall, serves DAPI, handles `diffusion://`.
@@ -279,8 +304,10 @@ chat harness, and compile pipeline it exercises are already proven).
 | CLI build | POSIX scripts | cross-platform npm scripts | cli 15/15 | built + staged | PASS | |
 | DAPI transport | loopback :3274 | unchanged, verified loopback-only | `http.test`, `tools-session` | Listen on 127.0.0.1, models JSON | PASS | |
 | cold-start | `open -a` | stub launch, env-stripped, detached | `cli-client.test` | `dapi open` relaunch, exit 0 | PASS | |
+| bg mcp launch | `open -g -a --args --hidden` | `--hidden` stub + stdio proxy | — | cold handshake, 18 tools, 0 windows, exit 0 | PASS | stale 01:01 build failed this; rebuilt 07:33 green |
+| reinstall heal | n/a | `winCliNeedsRepair` + startup heal | 2 new fixture tests | bin/ recreated on first run, shim works | PASS | |
 | staged wrapper | POSIX sh | `dapi.cmd` + `dapi.js` on own Electron | `dapi-launcher.test` 4 green | `--version` 0.205.2 | PASS | |
-| PATH install | /usr/local/bin symlink | user-PATH stable bin, .NET broadcast | `cli-install-win.test` 10 green | full install/uninstall cycle ×2 | PASS | |
+| PATH install | /usr/local/bin symlink | user-PATH stable bin, .NET broadcast | `cli-install-win.test` 12 green | full install/uninstall cycle ×2 | PASS | |
 | MCP externals | mac paths | per-target Windows paths | `mcp-config` 27 + `mcp-install` 11 | live Codex TOML cycle + byte-exact restore | PASS | other agents fixture-only |
 | Codex harness | app-server | unchanged, Windows env preserved | — | probe: ready/0.155.0/5 live models | PASS | chat UI session pending login |
 | Claude harness | — | unchanged | — | — | NOT TESTED | not installed |
@@ -303,5 +330,5 @@ chat harness, and compile pipeline it exercises are already proven).
 | CI | mac release | `windows.yml` validate+package, Node 20 | — | check/lint/test/build run locally | PASS | GitHub run not triggered from here |
 | E2E video edit+export | — | — | — | — | BLOCKED | needs Diffusion login |
 
-Final SHA for this report: `be419ba` + untracked-then-committed report
-(this file is committed separately as `docs: add Windows port report`).
+Final SHA for this report: `6c3707e` + this update (committed as
+`docs: record stale-build diagnosis, mcp cold proof, self-heal`).
