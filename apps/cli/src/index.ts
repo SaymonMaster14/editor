@@ -140,6 +140,24 @@ program
     console.log(JSON.stringify(output));
     if (output.issues.some((issue) => issue.severity === "error")) process.exitCode = 1;
   });
+
+program
+  .command("timeline")
+  .description(describe("timeline_edit"))
+  .argument("<op>", "lift, extract, rippleTrimIn, rippleTrimOut, roll, slip, slide, move, trimIn, trimOut, undo, redo, or list")
+  .argument("[target]", field("timeline_edit", "target"))
+  .option("--frame <n>", field("timeline_edit", "frame"), numeric)
+  .option("--delta <n>", field("timeline_edit", "delta"), numeric)
+  .option("--targets <ids>", "extra comma-separated node ids for multi-target lift/extract")
+  .action((op: ToolInput<"timeline_edit">["op"], target: string | undefined, opts: { frame?: number; delta?: number; targets?: string }) =>
+    run("timeline_edit", {
+      op,
+      ...(target ? { target } : {}),
+      ...(opts.frame !== undefined ? { frame: opts.frame } : {}),
+      ...(opts.delta !== undefined ? { delta: opts.delta } : {}),
+      ...(opts.targets ? { targets: opts.targets.split(",").map((id) => id.trim()).filter(Boolean) } : {}),
+    }),
+  );
 program
   .command("qa-sweep")
   .alias("qa")
