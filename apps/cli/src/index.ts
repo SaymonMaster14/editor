@@ -172,6 +172,20 @@ media
   );
 
 media
+  .command("scenes")
+  .description(describe("media_scenes"))
+  .argument("<path>", field("media_scenes", "path"))
+  .option("--threshold <n>", field("media_scenes", "threshold"), numeric)
+  .option("--min-shot <s>", field("media_scenes", "minShotSeconds"), numeric)
+  .action((ref: string, opts: { threshold?: number; minShot?: number }) =>
+    run("media_scenes", {
+      path: assetPath(ref),
+      ...(opts.threshold !== undefined ? { threshold: opts.threshold } : {}),
+      ...(opts.minShot !== undefined ? { minShotSeconds: opts.minShot } : {}),
+    }),
+  );
+
+media
   .command("transcribe")
   .description(describe("media_transcribe"))
   .argument("<path>", field("media_transcribe", "path"))

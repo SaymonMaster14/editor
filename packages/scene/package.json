@@ -1,0 +1,25 @@
+{
+  "name": "@diffusionstudio/scene",
+  "version": "0.1.0",
+  "description": "Scene intelligence primitives: histogram cut detection and shot lists over decoded thumbnails. Pure TypeScript, no DOM, no models — the renderer decodes; this package finds the cuts.",
+  "license": "MPL-2.0",
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "check": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "keywords": [
+    "scene",
+    "shot",
+    "cut-detection",
+    "video-analysis"
+  ],
+  "devDependencies": {
+    "typescript": "~5.9.3",
+    "vitest": "^4.0.0"
+  }
+}

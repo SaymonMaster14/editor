@@ -11,6 +11,7 @@ import { logs } from "./logs";
 import { mediaFilmstrip } from "./media-filmstrip";
 import { mediaGrab } from "./media-grab";
 import { mediaListen } from "./media-listen";
+import { mediaScenes } from "./media-scenes";
 import { mediaTranscribe } from "./media-transcribe";
 
 /** The messages of a failed parse, keyed by the path they point at. */
@@ -145,5 +146,21 @@ describe("audio_beats", () => {
     expect(issues(input.safeParse({ path: "/m.mp4", minBpm: 200, maxBpm: 60 })).maxBpm).toMatch(/less than maxBpm/);
     expect(issues(input.safeParse({ path: "/m.mp4", minBpm: 0 }))).toHaveProperty("minBpm");
     expect(input.safeParse({ path: "/m.mp4", minBpm: 90, maxBpm: 140 }).success).toBe(true);
+  });
+});
+
+describe("media_scenes", () => {
+  const input = mediaScenes.input;
+
+  it("parses a bare path with detector defaults", () => {
+    const args = input.parse({ path: "/c.mp4" });
+    expect(args.threshold).toBeUndefined();
+    expect(args.minShotSeconds).toBeUndefined();
+  });
+
+  it("rejects a non-positive threshold or negative shot length", () => {
+    expect(issues(input.safeParse({ path: "/c.mp4", threshold: 0 }))).toHaveProperty("threshold");
+    expect(issues(input.safeParse({ path: "/c.mp4", minShotSeconds: -1 }))).toHaveProperty("minShotSeconds");
+    expect(input.safeParse({ path: "/c.mp4", threshold: 0.5, minShotSeconds: 0 }).success).toBe(true);
   });
 });

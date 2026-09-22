@@ -19,6 +19,7 @@ import { mediaTranscribe } from "./media-transcribe";
 import { mediaFilmstrip } from "./media-filmstrip";
 import { mediaWaveform } from "./media-waveform";
 import { mediaListen } from "./media-listen";
+import { mediaScenes } from "./media-scenes";
 import { audioLoudness } from "./audio-loudness";
 import { audioBeats } from "./audio-beats";
 
@@ -43,6 +44,7 @@ export const handlers: Handlers = {
   media_filmstrip: mediaFilmstrip,
   media_waveform: mediaWaveform,
   media_listen: mediaListen,
+  media_scenes: mediaScenes,
   audio_loudness: audioLoudness,
   audio_beats: audioBeats,
 };
