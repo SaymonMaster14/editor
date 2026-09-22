@@ -41,7 +41,7 @@ import { getEditHistory } from '../history';
 import { deleteKeyframe } from '../keyframes';
 import { insertEdit, markIn, markOut, overwriteEdit } from '../source-edit';
 import { addMarker, seekMarker } from '../markers';
-import { rippleDeleteSelection, rippleTrimNextToPlayhead, rippleTrimPrevToPlayhead } from '../nle-actions';
+import { rippleDeleteSelection, rippleTrimNextToPlayhead, rippleTrimPrevToPlayhead, slideSelectionBy, slipSelectionBy } from '../nle-actions';
 import { splitAtPlayhead } from '../split';
 import { Keys, MODIFIER_KEYS, Pointer } from '../traits';
 import { editTransform } from './interactions';
@@ -83,6 +83,26 @@ export function rippleTrimPrev(world: World): void {
 /** W — trims the next edit to the playhead, closing the gap. */
 export function rippleTrimNext(world: World): void {
 	rippleTrimNextToPlayhead(world);
+}
+
+/** Slides the selection one frame earlier, pulling its neighbors along. */
+export function slideLeft(world: World): void {
+	slideSelectionBy(world, -1);
+}
+
+/** Slides the selection one frame later, pulling its neighbors along. */
+export function slideRight(world: World): void {
+	slideSelectionBy(world, 1);
+}
+
+/** Slips the selection's source one frame earlier; the timeline does not move. */
+export function slipLeft(world: World): void {
+	slipSelectionBy(world, -1);
+}
+
+/** Slips the selection's source one frame later; the timeline does not move. */
+export function slipRight(world: World): void {
+	slipSelectionBy(world, 1);
 }
 
 /** Lands the monitor’s marked range at the playhead where covered siblings give way (`.`). */
@@ -529,6 +549,19 @@ const PRESSED_SHORTCUTS: readonly Shortcut[] = [
 	{ keys: ['q', '!mod'], action: rippleTrimPrev },
 	{ keys: ['w', '!mod', '!shift'], action: rippleTrimNext },
 	{ keys: ['c', '!mod'], action: selectTool(ToolType.BLADE) },
+	{ keys: ['arrowleft', '!shift', '!alt'], action: nudge(-NUDGE, 0) },
+	{ keys: ['arrowright', '!shift', '!alt'], action: nudge(NUDGE, 0) },
+	{ keys: ['arrowup', '!shift', '!alt'], action: nudge(0, -NUDGE) },
+	{ keys: ['arrowdown', '!shift', '!alt'], action: nudge(0, NUDGE) },
+	{ keys: ['arrowleft', 'shift', '!alt'], action: nudge(-NUDGE_FAST, 0) },
+	{ keys: ['arrowright', 'shift', '!alt'], action: nudge(NUDGE_FAST, 0) },
+	{ keys: ['arrowup', 'shift', '!alt'], action: nudge(0, -NUDGE_FAST) },
+	{ keys: ['arrowdown', 'shift', '!alt'], action: nudge(0, NUDGE_FAST) },
+	// Premiere's Alt-arrows: slide on Left/Right, slip on Up/Down, one frame.
+	{ keys: ['arrowleft', 'alt', '!mod', '!shift'], action: slideLeft },
+	{ keys: ['arrowright', 'alt', '!mod', '!shift'], action: slideRight },
+	{ keys: ['arrowup', 'alt', '!mod', '!shift'], action: slipLeft },
+	{ keys: ['arrowdown', 'alt', '!mod', '!shift'], action: slipRight },
 	{ keys: [';', '!mod'], action: seekSelectionEdge('start') },
 	{ keys: ["'", '!mod'], action: seekSelectionEdge('end') },
 	// fn ←/→ on macOS, Home/End elsewhere.
