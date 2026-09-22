@@ -40,7 +40,9 @@
 - Permission model: all harnesses default to maximum access
   (codex `danger-full-access` + approval `never`; claude `bypass`; muse `allowAll`;
   "ask before acting outside this folder" is prompt text only).
-  `HarnessCapabilities` has no filesystem/sandbox fields.
+  `HarnessCapabilities` has no filesystem/sandbox fields. — DONE
+  (permission milestone below; muse file tools proven ungated, see
+  Limitations).
 - Production integrity / native-first enforcement: no editability validator;
   `check` validates project state, not native-vs-flattened representation.
 - Architecture checks: no `check:architecture`, no exceptions file.
@@ -230,6 +232,55 @@ Commit `c2d71af`, pushed to `fork/diffusion-on-steroids`.
   fades; guides/safe-zones overlay deferred. Physical dblclick/panel/
   Delete-key verification is human-verified (see Limitations).
 
+## Milestone: agent filesystem permission model (plan §8)
+
+Commit `c4f4726`, pushed to `fork/diffusion-on-steroids`.
+
+- `packages/agent-chat/src/host/policy.ts` (new): one canonical policy.
+  `buildPolicy(projectRoot, { mode, roots })` with `project` (default) /
+  `full` (explicit opt-in) modes and per-root read/write flags;
+  `canonicalizePath` (Windows casing, `.`/`..` traversal, drive letters,
+  UNC, realpath junctions), `checkRead`/`checkWrite` verdicts with
+  reasons, `decideToolAction` (path extraction per tool shape),
+  `scanShellCommand`/`suspiciousShell`/`unwrapShellCommand`/
+  `classifyShellCommand` (read/mutate/unknown) for the shell boundary.
+- Mapped into each harness at its deepest enforcement point, never as
+  prompt text alone: codex runs approval `untrusted` so the host
+  auto-decides every file/shell action against the policy (in-project
+  auto-accept, outside auto-decline, unverifiable asks the user) — the
+  sandbox row is defense-in-depth only, because the live matrix proved
+  the Windows workspace sandbox does not contain the file tools;
+  claude maps onto SDK permission modes; opencode onto ACP read vs
+  mutating kinds; muse defaults to `onRequest` (`allowAll` only under
+  full access) with host `approval/decide` verdicts, per-turn
+  triple-delivery dedupe, `listPending` refetch for choiceless
+  arrivals, and stale-requirement retry. `HarnessCapabilities` gains
+  honest `sandbox`/`readRoots`/`writeRoots`: codex F/T/T, claude
+  F/T/T, opencode F/F/F, muse F/T/**F** (see Limitations).
+- `access-menu.tsx` (new) + store/header wiring: access mode selector,
+  per-root read/write editor, persisted per chat; full-machine access
+  is never the silent default.
+- Tests: `policy.test.ts` + `harness-policy.test.ts` (normalization,
+  roots, shell classification, per-harness mapping) plus fixture
+  coverage for the muse notification-only and choiceless-listPending
+  paths (`fake-msp.cjs` modes, `muse.test.ts` 14/14). agent-chat
+  132/132, `tsc` clean, repo-wide `npm run check` clean.
+- Live 4-harness filesystem matrix (`C:/tmp/matrix.mjs`, throwaway:
+  needs auth + spends model calls, kept out of the repo) over
+  PROJECT / APPROVED_READ_ONLY / APPROVED_READ_WRITE / FORBIDDEN
+  with file tools AND shell: codex proven approval-gated green
+  earlier (zero questions, bare mode green); final re-run quota-
+  blocked ("usage limit", resets 16:34). Muse full run completed,
+  0 questions: project + readwrite writes land, read-only and shell
+  reads work, forbidden SHELL write blocked ("approval aborted") —
+  but read-only and forbidden FILE writes both land in every MSP
+  approval mode (`onRequest`, `promptUnmatched`, `denyUnmatched`),
+  proving MSP never gates file tools. Claude: probe ready, send
+  failed "Credit balance is too low" (environmental, unchanged).
+  OpenCode: probe ready, session open rejected "free tier can only
+  be used from within OpenCode" (environmental gate; earlier run
+  also showed premiere-pro MCP sprawl at 128 tools).
+
 ## Fire tests
 
 NLE E2E (agent path over DAPI/CLI): 27/27 green, see milestone above.
@@ -245,8 +296,12 @@ drag/click, and the panel buttons are human-verified (see Limitations —
 sandbox UIPI blocks synthetic OS input here). MarkerPanel mount is
 typecheck + code-path verified (no headless selection path exists to
 drive a scene selection from CLI).
-Human→agent, cheating, monolith, and filesystem fire tests still pending
-(plan §11). Evidence artifacts stay under `tmp/`.
+Filesystem fire test (§58–§59): live 4-harness matrix above — codex
+enforcement proven, muse shell-only enforcement proven with file
+tools honestly marked unenforceable, claude/opencode environmentally
+blocked (no credit / free-tier gate). Human→agent, cheating, and
+monolith fire tests still pending (plan §11). Evidence artifacts
+stay under `tmp/` (now gitignored: kept on disk, never committed).
 
 ## Performance
 
@@ -280,6 +335,13 @@ warnings); correction E2E 32/32, marker E2E 26/26, NLE E2E 27/27,
 source E2E 22/22 on the live stack (dev stack restarted once to load
 the new MCP tools — the desktop main bundle bakes the catalog at
 boot, per the dev-gotcha limitation).
+
+Permission-milestone gate at `c4f4726`: `npm run check` clean (all
+workspaces); agent-chat 132/132 (policy, harness-policy, muse 14/14
+incl. notification-only + choiceless-listPending paths, opencode,
+registry) with `tsc --noEmit` clean; NLE/source/marker/correction
+E2E proofs untouched by this slice (agent-chat-only changes plus the
+access-menu UI) and not re-run.
 
 ## Limitations
 
@@ -320,8 +382,32 @@ boot, per the dev-gotcha limitation).
   No work was lost: tree was clean, only the unstarted flow worker remained.
 - Steroids "documentation" is commit messages + in-code docs (repo convention);
   no separate Steroids report file exists.
+- Muse (MSP) file tools are UNGATED in every approval mode: live
+  probes in `onRequest`, `promptUnmatched`, and `denyUnmatched` all
+  landed both the read-only-root and the forbidden file write, while
+  the forbidden shell write was blocked. "Project only" for Muse
+  therefore means shell-decided + prompt-guided, never file-enforced;
+  capabilities honestly report `writeRoots: false`. MSP also
+  triple-delivers approvals (request + requested + updated) and
+  sometimes notification-only or choiceless — all handled (per-turn
+  dedupe, listPending refetch, stale retry) and fixture-covered.
+- Codex on Windows needs `danger-full-access` as the sandbox row even
+  in project mode: the workspace sandbox does not contain the file
+  tools but does break project shell access for non-admin users. The
+  real boundary is the host approval gate (`untrusted`), which the
+  matrix proved end to end. Off Windows the workspace sandbox still
+  runs as defense-in-depth.
+- Live-matrix environmentals (not code defects, each confirmed by the
+  harness's own error, not by our verdict): claude "Credit balance
+  is too low"; opencode free-tier session rejection (plus
+  premiere-pro MCP sprawl, 128 tools, in the earlier run); codex
+  usage-limit on the final re-run (earlier full run green).
+- `tmp/` E2E evidence is now gitignored: artifacts stay on this disk
+  for audit but never enter the repo (large binaries included).
 
 ## Final SHA
 
-Pending — goal continues. Interim HEAD: `c2d71af`
-(`fork/diffusion-on-steroids`), correction slice complete (plan §7).
+Pending — goal continues. Interim HEAD: `c4f4726`
+(`fork/diffusion-on-steroids`), permission slice complete (plan §8).
+Remaining: native-first/production integrity (§9), architecture
+constitution (§10), remaining fire tests (§11), packaging (§12).
