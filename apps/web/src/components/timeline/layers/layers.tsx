@@ -61,7 +61,7 @@ export function Layers() {
   const editor = useEditor();
   const timeline = useTimeline();
   const index = useTimelineIndex();
-  const { timelineMinimized, toggleTimeline } = useLayout();
+  const { timelineMinimized, toggleTimeline, timelineView, toggleTimelineView } = useLayout();
 
   const layers = createMemo(() => index().layers);
   const scene = createMemo(() => index().root);
@@ -194,6 +194,20 @@ export function Layers() {
               />
               <TooltipPortal>
                 <TooltipContent shortcut="⌘B">Split at playhead</TooltipContent>
+              </TooltipPortal>
+            </Tooltip>
+            <Tooltip placement="top">
+              <TooltipTrigger<typeof Button>
+                as={(triggerProps) => (
+                  <Button {...triggerProps} variant="ghost" size="icon" onClick={toggleTimelineView}>
+                    <Icon name={timelineView() === 'nle' ? 'large-timeline' : 'small-timeline'} class="size-6" />
+                  </Button>
+                )}
+              />
+              <TooltipPortal>
+                <TooltipContent>
+                  {timelineView() === 'nle' ? 'Compact timeline' : 'NLE timeline'}
+                </TooltipContent>
               </TooltipPortal>
             </Tooltip>
             <DropdownMenu>

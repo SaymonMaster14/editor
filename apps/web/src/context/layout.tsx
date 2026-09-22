@@ -7,6 +7,9 @@ import { assert } from '@/utils';
 import { createStoredSignal } from '@/lib/store';
 import { store } from '@/init';
 
+/** The timeline's presentation: NLE shows track headers and pro controls, compact keeps Diffusion minimal. Pure presentation — same engine, same rows. */
+export type TimelineView = 'compact' | 'nle';
+
 type LayoutContextValue = {
   uiVisible: Accessor<boolean>;
   timelineMinimized: Accessor<boolean>;
@@ -14,8 +17,9 @@ type LayoutContextValue = {
   setTimelineHeight(height: number): void;
   toggleUI(): void;
   toggleTimeline(): void;
+  timelineView: Accessor<TimelineView>;
+  toggleTimelineView(): void;
 };
-
 const LayoutContext = createContext<LayoutContextValue>();
 
 export const MIN_TIMELINE_HEIGHT = 120;
@@ -25,16 +29,19 @@ export function LayoutProvider(props: { children: JSX.Element }) {
   const [uiVisible, setUiVisible] = createStoredSignal(
     store.define<boolean>('layout.uiVisible', true),
   );
-
   const [timelineHeight, setTimelineHeight] = createStoredSignal(
     store.define<number>('layout.timelineHeight', DEFAULT_TIMELINE_HEIGHT),
   );
   const [timelineMinimized, setTimelineMinimized] = createStoredSignal(
     store.define<boolean>('layout.timelineMinimized', false),
   );
+  const [timelineView, setTimelineView] = createStoredSignal(
+    store.define<TimelineView>('layout.timelineView', 'nle'),
+  );
 
   const toggleUI = () => setUiVisible(!uiVisible());
   const toggleTimeline = () => setTimelineMinimized(!timelineMinimized());
+  const toggleTimelineView = () => setTimelineView(timelineView() === 'nle' ? 'compact' : 'nle');
 
   return (
     <LayoutContext.Provider
@@ -45,6 +52,8 @@ export function LayoutProvider(props: { children: JSX.Element }) {
         setTimelineHeight,
         toggleUI,
         toggleTimeline,
+        timelineView,
+        toggleTimelineView,
       }}>
       {props.children}
     </LayoutContext.Provider>

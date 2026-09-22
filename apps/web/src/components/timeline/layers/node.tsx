@@ -41,6 +41,7 @@ import { liftSelection, rippleDeleteSelection } from '@/engine/nle-actions';
 import { splitAtPlayhead } from '@/engine/split';
 import { DEFAULT_CLIP_HEIGHT, MAX_CLIP_HEIGHT, MIN_CLIP_HEIGHT, getClipFallbackName } from '@/engine/timeline';
 import { NESTED_INDENT_PX } from './config';
+import { useLayout } from '@/context/layout';
 import { useLayerContext } from './context';
 import { setRowHover } from './hover';
 
@@ -73,6 +74,51 @@ export function NodeLayer(props: LayerRowProps) {
   const nameTrait = useTrait(entity, Name);
   const name = createMemo(() => nameTrait()?.value || getClipFallbackName(world, entity()));
   const icon = createMemo(() => getLayerIcon(world, props.layer));
+  const { timelineView } = useLayout();
+  const nleView = () => timelineView() === 'nle';
+
+  /**
+   * The NLE track header, projected from the scene's own rows: audio-only
+   * rows read A1.. from the top, everything else V1.. from the bottom, the
+   * way Premiere numbers them. Nested rows carry no badge. Pure label —
+   * the hierarchy underneath is untouched.
+   */
+  const trackBadge = createMemo(() => {
+    if (props.depth !== 0) return null;
+    const self = entity();
+    const parent = getParentEntity(self);
+    if (!parent || !isScene(parent)) return null;
+    const rows = getEntityChildren(world, parent);
+    const kinds = rows.map((row) => {
+      const stack = [row];
+      let seen = false;
+      let audioOnly = true;
+      while (stack.length > 0) {
+        const node = stack.pop()!;
+        for (const child of getEntityChildren(world, node)) {
+          if (isSequence(child) || isGroup(child)) {
+            stack.push(child);
+            continue;
+          }
+          const type = findGeometryAsset(world, child)?.type;
+          if (type === undefined) continue;
+          seen = true;
+          if (type !== 'AUDIO') audioOnly = false;
+        }
+      }
+      return seen && audioOnly ? 'A' as const : 'V' as const;
+    });
+    const at = rows.indexOf(self);
+    if (at < 0) return null;
+    const kind = kinds[at]!;
+    let n = 0;
+    if (kind === 'V') {
+      for (let i = kinds.length - 1; i >= at; i--) if (kinds[i] === 'V') n++;
+    } else {
+      for (let i = 0; i <= at; i++) if (kinds[i] === 'A') n++;
+    }
+    return `${kind}${n}`;
+  });
 
   const toggleMuted = (e?: Event) => {
     e?.stopPropagation();
@@ -232,6 +278,11 @@ export function NodeLayer(props: LayerRowProps) {
                 transform: editing() ? 'none' : 'translateX(calc(var(--layer-x, 0px) * -1))',
               }}
             >
+              <Show when={nleView() && trackBadge() !== null}>
+                <span class="shrink-0 rounded border border-border px-1 text-[10px] font-mono leading-4 text-muted-foreground">
+                  {trackBadge()}
+                </span>
+              </Show>
               <button
                 disabled={!props.layer.expandable}
                 onClick={toggleExpanded}
@@ -280,7 +331,7 @@ export function NodeLayer(props: LayerRowProps) {
                 as={Button}
                 variant={muted() ? "on" : "ghost"}
                 size="icon"
-                class="invisible group-hover:visible"
+                class={nleView() ? 'visible' : 'invisible group-hover:visible'}
                 style={{ visibility: muted() ? 'visible' : undefined }}
                 onClick={toggleMuted}
               >
@@ -295,7 +346,7 @@ export function NodeLayer(props: LayerRowProps) {
                 as={Button}
                 variant={soloed() ? "on" : "ghost"}
                 size="icon"
-                class="invisible group-hover:visible"
+                class={nleView() ? 'visible' : 'invisible group-hover:visible'}
                 style={{ visibility: soloed() ? 'visible' : undefined }}
                 onClick={toggleSoloed}
               >
@@ -310,7 +361,7 @@ export function NodeLayer(props: LayerRowProps) {
                 as={Button}
                 variant="ghost"
                 size="icon"
-                class="invisible group-hover:visible"
+                class={nleView() ? 'visible' : 'invisible group-hover:visible'}
                 onClick={toggleHidden}
                 style={{ visibility: hidden() ? 'visible' : undefined }}
               >
