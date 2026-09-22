@@ -217,6 +217,18 @@ media
   );
 
 media
+  .command("reframe")
+  .description(describe("media_reframe"))
+  .argument("<path>", field("media_reframe", "path"))
+  .argument("<aspect>", field("media_reframe", "aspect"))
+  .option("--smoothing <n>", field("media_reframe", "smoothing"), numeric)
+  .option("--cuts <t...>", field("media_reframe", "cuts"), numeric)
+  .action(
+    (ref: string, aspect: string, opts: { smoothing?: number; cuts?: number[] }) =>
+      run("media_reframe", { path: assetPath(ref), aspect, ...opts }),
+  );
+
+media
   .command("transcribe")
   .description(describe("media_transcribe"))
   .argument("<path>", field("media_transcribe", "path"))

@@ -1,0 +1,28 @@
+{
+  "name": "@diffusionstudio/reframe",
+  "version": "0.1.0",
+  "description": "Intelligent reframing analysis: saliency-following crop trajectories for alternate aspects. Pure TypeScript, no DOM, no models — the renderer decodes; this package places the crop.",
+  "license": "MPL-2.0",
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "check": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "keywords": [
+    "reframe",
+    "auto-reframe",
+    "crop",
+    "video-analysis"
+  ],
+  "dependencies": {
+    "@diffusionstudio/track": "*"
+  },
+  "devDependencies": {
+    "typescript": "~5.9.3",
+    "vitest": "^4.0.0"
+  }
+}

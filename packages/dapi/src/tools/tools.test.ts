@@ -14,6 +14,7 @@ import { mediaListen } from "./media-listen";
 import { mediaScenes } from "./media-scenes";
 import { mediaTrack } from "./media-track";
 import { mediaStabilize } from "./media-stabilize";
+import { mediaReframe } from "./media-reframe";
 import { mediaTranscribe } from "./media-transcribe";
 
 /** The messages of a failed parse, keyed by the path they point at. */
@@ -200,5 +201,22 @@ describe("media_stabilize", () => {
     expect(issues(input.safeParse({ path: "/c.mp4", patchSize: 2 }))).toHaveProperty("patchSize");
     expect(issues(input.safeParse({ path: "/c.mp4", smoothing: -1 }))).toHaveProperty("smoothing");
     expect(input.safeParse({ path: "/c.mp4", patches: 3, smoothing: 0 }).success).toBe(true);
+  });
+});
+describe("media_reframe", () => {
+  const input = mediaReframe.input;
+
+  it("parses a path plus aspect with framing defaults", () => {
+    const args = input.parse({ path: "/c.mp4", aspect: "9:16" });
+    expect(args.aspect).toBe("9:16");
+    expect(args.smoothing).toBeUndefined();
+    expect(args.cuts).toBeUndefined();
+  });
+
+  it("rejects a missing aspect and bad framing options", () => {
+    expect(issues(input.safeParse({ path: "/c.mp4" }))).toHaveProperty("aspect");
+    expect(issues(input.safeParse({ path: "/c.mp4", aspect: "9:16", smoothing: -1 }))).toHaveProperty("smoothing");
+    expect(issues(input.safeParse({ path: "/c.mp4", aspect: "9:16", cuts: ["soon"] }))).toHaveProperty("cuts.0");
+    expect(input.safeParse({ path: "/c.mp4", aspect: "1:1", cuts: [1.5], smoothing: 0 }).success).toBe(true);
   });
 });
