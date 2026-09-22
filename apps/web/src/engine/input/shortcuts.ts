@@ -38,6 +38,7 @@ import { getDocumentEditor } from '../editor';
 import { groupSelection, ungroupSelection, unwrapSequenceSelection, wrapSelectionInScene, wrapSelectionInSequence } from '../group';
 import { getEditHistory } from '../history';
 import { insertEdit, markIn, markOut, overwriteEdit } from '../source-edit';
+import { addMarker, seekMarker } from '../markers';
 import { splitAtPlayhead } from '../split';
 import { Keys, MODIFIER_KEYS, Pointer } from '../traits';
 import { editTransform } from './interactions';
@@ -71,6 +72,21 @@ export function insertMonitorRange(world: World): void {
 export function overwriteMonitorRange(world: World): void {
 	overwriteEdit(world);
 }
+/** Pins a flag at the playhead, or updates the one standing there (M). */
+export function addMarkerAtPlayhead(world: World): void {
+	addMarker(world);
+}
+
+/** Jumps the playhead to the next flag past it (⇧M). */
+export function seekNextMarker(world: World): void {
+	seekMarker(world, { direction: 'next' });
+}
+
+/** Jumps the playhead to the previous flag before it (⌥M). */
+export function seekPrevMarker(world: World): void {
+	seekMarker(world, { direction: 'prev' });
+}
+
 export function deleteSelection(world: World): void {
 	const selected = [...world.query(Selected)];
 
@@ -496,6 +512,11 @@ const PRESSED_SHORTCUTS: readonly Shortcut[] = [
 	// the same trait the monitor UI and the source_edit tool read and write.
 	{ keys: ['i', '!mod'], action: markIn },
 	{ keys: ['o', '!mod'], action: markOut },
+	// The scene's marker flags: M pins one at the playhead, ⇧M/⌥M jump between them.
+	// The plain binding excludes the modifiers explicitly, so a shifted M never also adds.
+	{ keys: ['m', '!mod', '!shift', '!alt'], action: addMarkerAtPlayhead },
+	{ keys: ['m', 'shift', '!mod', '!alt'], action: seekNextMarker },
+	{ keys: ['m', 'alt', '!mod', '!shift'], action: seekPrevMarker },
 	{ keys: [',', '!mod'], action: insertMonitorRange },
 	{ keys: ['.', '!mod'], action: overwriteMonitorRange },
 	{ keys: [']', '!mod'], action: restack('front') },

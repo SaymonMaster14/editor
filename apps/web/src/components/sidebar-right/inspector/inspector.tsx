@@ -23,6 +23,7 @@ import { BackgroundSettings } from "./background";
 import { VariablesSettings } from "./variables";
 import { SceneTemplatePanel } from "./scene-template";
 import { AssetInfoPanel } from "./asset-info";
+import { MarkerPanel } from "./marker";
 import { TimeSettings } from "./time";
 import { AppearanceSettings } from "./appearance";
 import { Alignment } from "./alignment";
@@ -114,6 +115,10 @@ export function Inspector() {
 
           <Show when={nodes().length > 1}>
             <Alignment />
+          </Show>
+
+          <Show when={includesTarget("scene")}>
+            <MarkerPanel />
           </Show>
 
           <Show when={includesTarget("scene") && !isNested()}>

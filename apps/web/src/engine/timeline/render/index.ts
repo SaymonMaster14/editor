@@ -8,6 +8,7 @@ export * from './group';
 export * from './keyframes';
 export * from './layers';
 export * from './marquee';
+export * from './markers';
 export * from './playhead';
 export * from './ruler';
 export * from './snap';

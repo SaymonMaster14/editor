@@ -37,6 +37,7 @@ import { mediaDepth } from "./tools/media-depth";
 import { mediaFlow } from "./tools/media-flow";
 import { timelineEdit } from "./tools/timeline-edit";
 import { sourceEdit } from "./tools/source-edit";
+import { marker } from "./tools/marker";
 import { audioLoudness } from "./tools/audio-loudness";
 import { audioBeats } from "./tools/audio-beats";
 import { fonts } from "./tools/fonts";
@@ -56,6 +57,7 @@ export const catalog = [
   exportScene,
   timelineEdit,
   sourceEdit,
+  marker,
   assetsSearch,
   assetsImport,
   mediaProbe,

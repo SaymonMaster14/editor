@@ -35,6 +35,21 @@ export const PlaybackRate = trait({ value: 1 });
 // Explicit playback/export window on a scene.
 export const Workarea = trait({ start: 0, end: 0 });
 
+// A named flag pinned to one frame of a scene's timeline: an NLE marker.
+// `at` is a scene frame; `name` is free text; `color` is one of the marker
+// palette names (see `MarkerColor` in `@diffusionstudio/jsx`), anything else
+// rendering as the default.
+export type SceneMarker = { at: number; name: string; color: string };
+
+// The flag color a fresh marker gets: Premiere's default marker green. The
+// reconciler applies it to entries that author none, so the trait always
+// holds a concrete color and a reopen reads back what the add wrote.
+export const DEFAULT_MARKER_COLOR = 'green';
+
+// The scene's markers, earliest first. One marker per frame: adding where one
+// stands updates it, so `at` is the marker's address.
+export const Markers = trait({ list: () => [] as SceneMarker[] });
+
 // Playback state of an entity.
 export const Playback = trait({
 	playing: false,

@@ -461,6 +461,21 @@ export type CameraMatrix = [a: number, b: number, c: number, d: number, e: numbe
  */
 export type TimelineView = [zoom: number, x: number, y: number];
 
+/** The marker flag palette, shared by the schema, the ruler and the inspector. */
+export type MarkerColor =
+  | "yellow" | "blue" | "green" | "pink"
+  | "purple" | "orange" | "cyan" | "red";
+
+/** One NLE marker as a scene authors it: a time, and an optional name and flag color. */
+export type SceneMarkerSpec = {
+  /** When the flag stands, in any time format. */
+  at: Time;
+  /** What the flag says; empty names read as "Marker". */
+  name?: string;
+  /** Flag color; anything else renders as the default. */
+  color?: MarkerColor;
+};
+
 /**
  * The infinite canvas every project renders into; only allowed as the root
  * element, and holding `<scene>` children.
@@ -547,6 +562,14 @@ export type SceneProps = IdentityProps & PositionProps & Required<Pick<SizeProps
    * is read wherever the file is: what it says is what comes out of a render.
    */
   workarea?: [inPoint: Time, outPoint: Time] | null;
+  /**
+   * Named flags pinned to frames of this scene's timeline: NLE markers. One
+   * per frame — a second marker authored at the same time updates the first.
+   * Editor state carried by the source the way `workarea` is, but unlike
+   * `playhead` it is a deliberate annotation, so the editor writes it through
+   * the history: adding, moving and deleting markers all undo.
+   */
+  markers?: SceneMarkerSpec[];
   /**
    * Dialogue-driven ducking for the scene's mix: clips on `duckBuses` ride
    * down while the `keyBus` level sits above `thresholdDb`, following one

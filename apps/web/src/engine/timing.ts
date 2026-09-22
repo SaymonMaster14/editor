@@ -20,7 +20,9 @@ import {
 	Computed,
 	FrameRate,
 	Host,
+	Workarea,
 	framesToSeconds,
+	getActiveEntity,
 	getSourceFrameAt,
 	getTimelineOrigin,
 	secondsToFrames,
@@ -78,6 +80,37 @@ export function editWorkarea(world: World, scene: Entity, range: [start: number,
 		'workarea',
 		range ? [framesToSeconds(range[0], fps), framesToSeconds(range[1], fps)] : false,
 	);
+}
+
+/**
+/**
+ * Moves the work area's in edge to scene frame `at` — the playhead when not
+ * given — clamping at the out edge, so the range never reads backwards. With
+ * no work area, one opens from `at` to the scene's end.
+ */
+export function setWorkareaIn(world: World, at?: number, scene?: Entity): void {
+	const target = scene ?? getActiveEntity(world);
+	if (!target) return;
+	const computed = store(world, Computed);
+	const point = Math.max(0, Math.round(at ?? computed.localTime[target.id()] ?? 0));
+	const workarea = target.get(Workarea);
+	const end = workarea ? Math.max(point, workarea.end) : Math.max(point, Math.round(computed.duration[target.id()] ?? point));
+	editWorkarea(world, target, [point, end]);
+}
+
+/**
+ * Moves the work area's out edge to scene frame `at` — the playhead when not
+ * given — clamping at the in edge, so the range never reads backwards. With
+ * no work area, one opens from the scene's start to `at`.
+ */
+export function setWorkareaOut(world: World, at?: number, scene?: Entity): void {
+	const target = scene ?? getActiveEntity(world);
+	if (!target) return;
+	const computed = store(world, Computed);
+	const point = Math.max(0, Math.round(at ?? computed.localTime[target.id()] ?? 0));
+	const workarea = target.get(Workarea);
+	const start = workarea ? Math.min(point, workarea.start) : 0;
+	editWorkarea(world, target, [start, point]);
 }
 
 /**

@@ -3,13 +3,13 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 
-import { Active, AdjustmentLayer, Animation, AnimationPhase, AnimationType, appendChild, AssetId, Audio, AudioRange, Background, bindAsset, BlendMode, BlendModeType, Blur, Caption, CaptionAlign, CAPTION_PRESET_FILLS, CAPTION_PRESET_STYLES, CaptionType, Chars, ClipHeight, ClipsContent, Computed, Constraint, ConstraintCache, ConstraintType, CornerRadius, createEntity, DEFAULT_BACKGROUND, Color, ColorStop, Delay, Ducking, DuckingConfig, Effect, EffectType, Expanded, Fade, FontStyle, FramePromises, FrameRate, Generating, GenerationRequest, getActiveEntity, Loop, LoadRequest, Geometry, GeometryType, getEntityTree, getParentEntity, getParentNode, Hidden, Host, IsMask, isText, ItemIndex, KeepAspectRatio, Keyframe, KeyframeTrack, MixBus, MixedCornerRadius, Mode, Muted, Name, Offset, Opacity, Paint, Pan, PaintType, parseColor, PendingSource, PendingSync, Playback, PlaybackRate, Position, removeChild, RenderSurface, resizeEntity, Scale, ScaleMode, ScaleModeType, secondsToFrames, getAsset, getEntityChildren, Group, Sequential, Shader, Size, Stage, Root, Rotation, Scene, Selected, Shadow, Source, SourceFrameRate, setCameraMatrix, setPlayhead, setTimelineView, Stroke, StrokeCap, StrokeJoin, StrokeStyle, SyncRequest, TextAlign, TextBaseline, TextCase, TextRange, TextStyle, TranscriptionRequest, Transition, TransitionType, Trim, UniformScale, Volume, Workarea } from '@diffusionstudio/runtime';
+import { Active, AdjustmentLayer, Animation, AnimationPhase, AnimationType, appendChild, AssetId, Audio, AudioRange, Background, bindAsset, BlendMode, BlendModeType, Blur, Caption, CaptionAlign, CAPTION_PRESET_FILLS, CAPTION_PRESET_STYLES, CaptionType, Chars, ClipHeight, ClipsContent, Computed, Constraint, ConstraintCache, ConstraintType, CornerRadius, createEntity, DEFAULT_BACKGROUND, Color, ColorStop, Delay, Ducking, DuckingConfig, Effect, EffectType, Expanded, Fade, FontStyle, FramePromises, FrameRate, Generating, GenerationRequest, getActiveEntity, Loop, LoadRequest, Markers, DEFAULT_MARKER_COLOR, Geometry, GeometryType, getEntityTree, getParentEntity, getParentNode, Hidden, Host, IsMask, isText, ItemIndex, KeepAspectRatio, Keyframe, KeyframeTrack, MixBus, MixedCornerRadius, Mode, Muted, Name, Offset, Opacity, Paint, Pan, PaintType, parseColor, PendingSource, PendingSync, Playback, PlaybackRate, Position, removeChild, RenderSurface, resizeEntity, Scale, ScaleMode, ScaleModeType, secondsToFrames, getAsset, getEntityChildren, Group, Sequential, Shader, Size, Stage, Root, Rotation, Scene, Selected, Shadow, Source, SourceFrameRate, setCameraMatrix, setPlayhead, setTimelineView, Stroke, StrokeCap, StrokeJoin, StrokeStyle, SyncRequest, TextAlign, TextBaseline, TextCase, TextRange, TextStyle, TranscriptionRequest, Transition, TransitionType, Trim, UniformScale, Volume, Workarea } from '@diffusionstudio/runtime';
 import { LOOP_ATTR, parseTime, SOURCE_ATTR } from '@diffusionstudio/jsx';
 import { createSignal } from 'solid-js';
 import { SVGElements } from 'solid-js/web';
 import { IsExcluded } from 'koota';
 
-import type { CameraMatrix, PropertyPath, SceneNode, TimelineView } from '@diffusionstudio/runtime';
+import type { CameraMatrix, PropertyPath, SceneMarker, SceneNode, TimelineView } from '@diffusionstudio/runtime';
 import type { AnimatableProperty, AssetRef } from '@diffusionstudio/jsx';
 
 import type { Entity, World } from 'koota';
@@ -1468,6 +1468,35 @@ export class RuntimeDocument implements ProjectDocument<SceneNode> {
 
 				entity.add(Workarea);
 				entity.set(Workarea, { start: this.toFrames(start), end: this.toFrames(end) });
+				return;
+			}
+			case 'markers': {
+				// An array of { at, name?, color? } or none: anything else (`false`
+				// included, which is what the editor writes to take them off) clears.
+				// One marker per frame survives: a second entry at the same time
+				// updates the first, so `at` stays the marker's address.
+				if (!Array.isArray(value) || value.length === 0) {
+					entity.remove(Markers);
+					return;
+				}
+				const byFrame = new Map<number, SceneMarker>();
+				for (const entry of value) {
+					if (typeof entry !== 'object' || entry === null) continue;
+					const spec = entry as { at?: unknown; name?: unknown; color?: unknown };
+					const at = toSeconds(spec.at);
+					if (at === undefined) continue;
+					byFrame.set(this.toFrames(at), {
+						at: this.toFrames(at),
+						name: typeof spec.name === 'string' ? spec.name : '',
+						color: typeof spec.color === 'string' && spec.color ? spec.color : DEFAULT_MARKER_COLOR,
+					});
+				}
+				if (byFrame.size === 0) {
+					entity.remove(Markers);
+					return;
+				}
+				entity.add(Markers);
+				entity.set(Markers, { list: [...byFrame.values()].sort((a, b) => a.at - b.at) });
 				return;
 			}
 			case 'background': {

@@ -12,8 +12,13 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuGroup,
 } from "@/components/ui/dropdown-menu";
+import { useWorld } from "@diffusionstudio/koota-solid";
+import { addMarker, clearMarkers, seekMarker } from "@/engine/markers";
+import { setWorkareaIn, setWorkareaOut } from "@/engine/timing";
 
 export function TimelineMenu() {
+  const world = useWorld();
+
   return (
     <>
       <DropdownMenuGroup>
@@ -91,21 +96,31 @@ export function TimelineMenu() {
       <DropdownMenuSeparator />
 
       <DropdownMenuGroup>
-        <DropdownMenuItem>
+        <DropdownMenuItem onSelect={() => addMarker(world)}>
           Add marker
           <DropdownMenuShortcut>M</DropdownMenuShortcut>
         </DropdownMenuItem>
-        <DropdownMenuItem>
-          Mark in / clear in
-          <DropdownMenuShortcut>I</DropdownMenuShortcut>
+        <DropdownMenuItem onSelect={() => seekMarker(world, { direction: 'next' })}>
+          Next marker
+          <DropdownMenuShortcut>⇧M</DropdownMenuShortcut>
         </DropdownMenuItem>
-        <DropdownMenuItem>
-          Mark out / clear out
-          <DropdownMenuShortcut>O</DropdownMenuShortcut>
-        </DropdownMenuItem>
-        <DropdownMenuItem>
-          Clear all markers
+        <DropdownMenuItem onSelect={() => seekMarker(world, { direction: 'prev' })}>
+          Previous marker
           <DropdownMenuShortcut>⌥M</DropdownMenuShortcut>
+        </DropdownMenuItem>
+        <DropdownMenuItem onSelect={() => clearMarkers(world)}>
+          Clear all markers
+        </DropdownMenuItem>
+      </DropdownMenuGroup>
+
+      <DropdownMenuSeparator />
+
+      <DropdownMenuGroup>
+        <DropdownMenuItem onSelect={() => setWorkareaIn(world)}>
+          Set work area in
+        </DropdownMenuItem>
+        <DropdownMenuItem onSelect={() => setWorkareaOut(world)}>
+          Set work area out
         </DropdownMenuItem>
       </DropdownMenuGroup>
 
@@ -272,7 +287,6 @@ export function TimelineAudioMenu() {
       <DropdownMenuGroup>
         <DropdownMenuItem>
           Mute/unmute audio
-          <DropdownMenuShortcut>⌥M</DropdownMenuShortcut>
         </DropdownMenuItem>
       </DropdownMenuGroup>
 

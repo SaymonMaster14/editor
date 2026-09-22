@@ -184,6 +184,31 @@ program
     }),
   );
 program
+program
+  .command("marker")
+  .description(describe("marker"))
+  .argument("<op>", "add, remove, move, list, seek, or clear")
+  .option("--at <time>", field("marker", "at"))
+  .option("--from <time>", field("marker", "from"))
+  .option("--to <time>", field("marker", "to"))
+  .option("--name <name>", field("marker", "name"))
+  .option("--color <color>", field("marker", "color"))
+  .option("--direction <next|prev>", field("marker", "direction"))
+  .action((
+    op: ToolInput<"marker">["op"],
+    opts: { at?: string; from?: string; to?: string; name?: string; color?: string; direction?: "next" | "prev" },
+  ) =>
+    run("marker", {
+      op,
+      ...(opts.at !== undefined ? { at: opts.at } : {}),
+      ...(opts.from !== undefined ? { from: opts.from } : {}),
+      ...(opts.to !== undefined ? { to: opts.to } : {}),
+      ...(opts.name !== undefined ? { name: opts.name } : {}),
+      ...(opts.color !== undefined ? { color: opts.color } : {}),
+      ...(opts.direction !== undefined ? { direction: opts.direction } : {}),
+    }),
+  );
+program
   .command("qa-sweep")
   .alias("qa")
   .description(`${describe("qa_sweep")} Exits 1 when an error-severity finding is recorded.`)

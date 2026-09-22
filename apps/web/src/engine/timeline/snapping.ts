@@ -3,7 +3,7 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 /**
- * What a dragged edge sticks to: the start of the scene, the playhead, and
+ * What a dragged edge sticks to: the start of the scene, the playhead, the scene's markers, and
  * the edges of every clip that is not moving. Worked out in frames rather
  * than pixels — a frame is what the timeline is actually made of, and
  * rounding to pixels and back makes a clip jitter by a frame either side of
@@ -17,6 +17,7 @@ import {
 	Computed,
 	Geometry,
 	Group,
+	Markers,
 	Selected,
 	TrimDragOrigin,
 	getActiveEntity,
@@ -56,6 +57,8 @@ export function getSnapFrames(world: World): number[] {
 
 	// The beginning of the scene and the playhead are always worth landing on.
 	const frames = new Set<number>([0, getCurrentFrame(world, scene)]);
+
+	for (const marker of scene.get(Markers)?.list ?? []) frames.add(marker.at);
 
 	for (const entity of descendantsOf(world, scene)) {
 		if (excluded.has(entity) || entity.has(Selected)) continue;
