@@ -1,7 +1,7 @@
 # HUMAN NLE FRONTEND REPORT — Diffusion Studio convergence
 
 - Starting SHA: `d389d00c123761d86e9a5ecd4b7fcbfd45a7012d`
-- Final SHA: `7d15712e5f2396dca533cbd67d9034e4ca87ec6a` (+ Q-landing fix `5aa5f6e`, viewer `ecdc18a` — see log)
+- Final SHA: `3afb81b` + fixes below — see log (branch head moves; this file tracks content, not hash)
 - Branch: `diffusion-on-steroids` (pushed to `fork` remote; `origin` is read-only here: 403)
 - Mission: expose the existing backend as a human NLE. No rebuilds: every item below reuses the canonical engine.
 
@@ -47,12 +47,12 @@ No second engines; no shadow state; arch checker clean.
 
 ## Verification
 
-- `tsc --noEmit` clean (web, dapi, cli); `check:architecture` PASS, 0 errors;
-  workspace tests all pass; `tmp/nle-e2e/proof.mjs` **33/33 green on a source dev stack**,
-  including new split + Q single-step-undo assertions. The fire-test caught one real bug
-  (Q landing the trimmed clip at `oldStart − delta`), fixed and re-proven.
-- Stock path proven live: wikimedia search → candidate import with full provenance
-  through the refactored shared `importInternetAsset` (agent handler thinned onto it).
+- `tsc --noEmit` clean (web, dapi, cli, runtime); `check:architecture` PASS, 0 errors;
+  `tmp/nle-e2e/proof.mjs` **33/33 green on a source dev stack** (incl. roll-refactor
+  re-proof and live wikimedia search → import with full provenance).
+  Workspace suites pass except `apps/desktop`, which intermittently dies on a native
+  `fs-event.c` assertion inside a vitest worker — untouched by this branch
+  (`git diff` empty there), environmental flake.
 - Screenshots: app-window capture returns black in this session (no compositor) — no visuals attached.
 
 ## Remaining gaps (honest)
