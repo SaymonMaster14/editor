@@ -22,6 +22,7 @@ import { AUTH_PROTOCOL, deepLinkChannel, findProtocolUrl, isHiddenLaunch } from 
 import { chromeOptions } from "./window-chrome";
 import { mainBridge } from "./main-manager";
 import { MAIN_CHANNELS } from "./main-channels";
+import { resolvePython, segmentPaths, SegmentWorker } from "./segment-worker";
 import {
   compileProject,
   createProject,
@@ -50,7 +51,7 @@ import {
   writeManifest,
   writeProject,
 } from "./projects";
-import type { DeepLinkChannel } from "./main-channels";
+import type { DeepLinkChannel, MainRequestMap } from "./main-channels";
 import type { LogEntry } from "@diffusionstudio/dapi";
 
 const DEV_URL = "http://localhost:5173";
@@ -117,6 +118,36 @@ const pendingDeepLinks = new Map<DeepLinkChannel, string>();
 // (page logs, worker logs, uncaught errors) without touching the web bundle.
 const LOG_BUFFER_MAX = 2000;
 const logBuffer: LogEntry[] = [];
+
+// The segmentation worker: one persistent Python child for the app's life,
+// spawned lazily on the first SEGMENT_RUN and stopped on quit. Null until
+// first use, so machines without Python pay nothing.
+let segmentWorker: SegmentWorker | null = null;
+
+type SegmentRunRequest = MainRequestMap[typeof MAIN_CHANNELS.SEGMENT_RUN]["request"];
+
+async function segmentRun(request: SegmentRunRequest) {
+  segmentWorker ??= createSegmentWorker();
+  return segmentWorker.segment(request.png, { classes: request.classes, conf: request.conf });
+}
+
+function createSegmentWorker(): SegmentWorker {
+  const python = resolvePython();
+  if (!python) {
+    throw new Error(
+      "Segmentation needs a Python 3 with ultralytics, opencv-python, and torch installed; none was found. " +
+        "Run `python -m pip install ultralytics opencv-python torch` in the interpreter you want the app to use, and retry. " +
+        "Set DIFFUSION_STUDIO_PYTHON to point at a specific interpreter.",
+    );
+  }
+  const { scriptPath, modelsDir } = segmentPaths({
+    isPackaged: app.isPackaged,
+    appPath: app.getAppPath(),
+    resourcesPath: process.resourcesPath,
+    userData: app.getPath("userData"),
+  });
+  return new SegmentWorker({ python, scriptPath, modelsDir, log: (message) => console.error(message) });
+}
 
 // The docs the MCP instructions point agents at: staged into the bundle by
 // scripts/stage-docs.mjs (Contents/Resources/docs) when packaged; the repo's
@@ -298,6 +329,7 @@ if (app.requestSingleInstanceLock()) {
   mainBridge.handle(MAIN_CHANNELS.CLI_UNINSTALL, () => uninstallCli());
   mainBridge.handle(MAIN_CHANNELS.ASSETS_SEARCH, (request) => searchInternetAssets(request));
   mainBridge.handle(MAIN_CHANNELS.ASSETS_DOWNLOAD, (request) => downloadInternetAsset(request));
+  mainBridge.handle(MAIN_CHANNELS.SEGMENT_RUN, (request) => segmentRun(request));
   mainBridge.handle(MAIN_CHANNELS.PROJECTS_PICK_ROOT, () => pickRoot(mainWindow));
   mainBridge.handle(MAIN_CHANNELS.PROJECTS_PICK_FOLDER, () => pickFolder(mainWindow));
   mainBridge.handle(MAIN_CHANNELS.PROJECTS_DEFAULT_ROOT, () => defaultRoot(mainWindow));
@@ -425,6 +457,8 @@ if (app.requestSingleInstanceLock()) {
     unwatchAll();
     stopAgentChat();
     dapi.stop();
+    void segmentWorker?.stop();
+    segmentWorker = null;
   });
 
   app.on("window-all-closed", () => {

@@ -27,6 +27,7 @@ import { mediaReframe } from "./media-reframe";
 import { mediaKey } from "./media-key";
 import { mediaRetime } from "./media-retime";
 import { mediaScopes } from "./media-scopes";
+import { mediaSegment } from "./media-segment";
 import { audioLoudness } from "./audio-loudness";
 import { audioBeats } from "./audio-beats";
 
@@ -59,6 +60,7 @@ export const handlers: Handlers = {
   media_key: mediaKey,
   media_retime: mediaRetime,
   media_scopes: mediaScopes,
+  media_segment: mediaSegment,
   audio_loudness: audioLoudness,
   audio_beats: audioBeats,
 };

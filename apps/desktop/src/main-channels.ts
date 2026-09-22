@@ -9,7 +9,7 @@
 //
 // Tool calls from the MCP server use their own wire (DAPI_WIRE in
 // @diffusionstudio/dapi), in the other direction: main asks, the renderer answers.
-import type { LogEntry, ScreenshotResult } from "@diffusionstudio/dapi";
+import type { LogEntry, ScreenshotResult, SegmentWorkerResult } from "@diffusionstudio/dapi";
 import type { SourceEdit, WriteResult } from "./edit-types";
 import type { AgentId } from "./mcp-config";
 import type {
@@ -78,6 +78,7 @@ export const MAIN_CHANNELS = {
   CLI_UNINSTALL: "cli:uninstall",
   ASSETS_SEARCH: "assets:search",
   ASSETS_DOWNLOAD: "assets:download",
+  SEGMENT_RUN: "segment:run",
 
   // Main→Renderer events
   AUTH_CALLBACK: "auth:callback",
@@ -342,6 +343,13 @@ export type MainRequestMap = {
   [MAIN_CHANNELS.ASSETS_DOWNLOAD]: {
     request: InternetDownloadRequest;
     response: InternetDownloadResult;
+  };
+  // One frame to the segmentation worker: the renderer decoded it and main
+  // owns the Python child process, so the PNG crosses here and the masks
+  // come back as bytes (structured clone carries Uint8Array both ways).
+  [MAIN_CHANNELS.SEGMENT_RUN]: {
+    request: { png: Uint8Array; classes?: string[]; conf?: number };
+    response: SegmentWorkerResult;
   };
 };
 

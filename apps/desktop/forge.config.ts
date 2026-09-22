@@ -29,8 +29,9 @@ const config: ForgeConfig = {
       path !== '/web' &&
       !path.startsWith('/web/'),
     // Staged by scripts/stage-{cli,runtime,docs}.mjs; end up at
-    // Contents/Resources/{cli,runtime,docs}.
-    extraResource: ['./cli', './runtime', './docs'],
+    // Contents/Resources/{cli,runtime,docs,workers}. workers/ ships as-is:
+    // the Python model workers (see segmentPaths) run from Resources.
+    extraResource: ['./cli', './runtime', './docs', './workers'],
     osxSign: process.env.SKIP_SIGN ? undefined : {},
     osxNotarize:
       process.env.APPLE_ID && process.env.APPLE_PASSWORD && process.env.APPLE_TEAM_ID

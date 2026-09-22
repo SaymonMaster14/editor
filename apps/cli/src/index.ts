@@ -359,6 +359,19 @@ media
   });
 
 media
+  .command("segment")
+  .alias("seg")
+  .description(describe("media_segment"))
+  .argument("<path>", field("media_segment", "path"))
+  .option("-t, --time <s>", field("media_segment", "time"), numeric)
+  .option("--classes <name...>", field("media_segment", "classes"))
+  .option("--conf <n>", field("media_segment", "conf"), numeric)
+  .option("-o, --output <dir>", field("media_segment", "output"))
+  .action((ref: string, opts: Omit<ToolInput<"media_segment">, "path">) =>
+    run("media_segment", { path: assetPath(ref), ...opts, output: opts.output && resolve(opts.output) }),
+  );
+
+media
   .command("filmstrip")
   .alias("film")
   .description(describe("media_filmstrip"))

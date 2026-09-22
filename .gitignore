@@ -37,6 +37,8 @@ out/
 .vercel
 
 # AI
+# Model weights: downloaded on first use into the app's models dir, never committed.
+*.pt
 skills-lock.json
 .agents
 .claude

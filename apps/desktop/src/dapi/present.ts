@@ -29,6 +29,8 @@ export async function present(name: ToolName, args: unknown, result: unknown): P
       return presentImages(result as ToolResult<"media_grab">, (args as ToolArgs<"media_grab">).output, "grab");
     case "media_effects":
       return presentEffects(result as ToolResult<"media_effects">, (args as ToolArgs<"media_effects">).output);
+    case "media_segment":
+      return presentSegment(result as ToolResult<"media_segment">, (args as ToolArgs<"media_segment">).output);
     case "media_filmstrip":
       return presentPreview(result as ToolResult<"media_filmstrip">, (args as ToolArgs<"media_filmstrip">).output, "filmstrip");
     case "media_waveform":
@@ -145,6 +147,41 @@ async function presentEffects(result: ToolResult<"media_effects">, output: strin
     cached: result.cached,
   };
   return { output: presented, images: written };
+}
+
+/**
+ * Segmentation lands as the overlay plus one mask PNG per detection:
+ * `overlay.png` for eyeballing, `mask-<cls>-<i>.png` for compositing
+ * (background blur, text-behind-subject). The overlay rides inline when
+ * small; the masks are path-only — the agent composites from the files.
+ */
+async function presentSegment(result: ToolResult<"media_segment">, output: string | undefined): Promise<Presented> {
+  const dir = output ?? (await mkdtemp(join(tmpdir(), "dapi-segment-")));
+  await mkdir(dir, { recursive: true });
+  const overlayPath = join(dir, "overlay.png");
+  await writeFile(overlayPath, result.overlay);
+  const refs: ToolOutput<"media_segment">["detections"] = [];
+  for (let i = 0; i < result.detections.length; i++) {
+    const det = result.detections[i]!;
+    const safe = det.cls.toLowerCase().replace(/[^a-z0-9]+/g, "-");
+    const maskPath = join(dir, `mask-${safe}-${i}.png`);
+    await writeFile(maskPath, det.mask);
+    const { mask: _mask, ...rest } = det;
+    refs.push({ ...rest, mask: maskPath });
+  }
+  const presented: ToolOutput<"media_segment"> = {
+    path: result.path,
+    time: result.time,
+    width: result.width,
+    height: result.height,
+    engine: result.engine,
+    device: result.device,
+    ms: result.ms,
+    detections: refs,
+    overlay: overlayPath,
+    cached: result.cached,
+  };
+  return { output: presented, images: [{ path: overlayPath, png: result.overlay }] };
 }
 
 async function presentPreview(

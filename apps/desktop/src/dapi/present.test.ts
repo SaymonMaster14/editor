@@ -117,6 +117,47 @@ describe("present", () => {
     expect((again.output as { receipt: { path: string } }).receipt.path).toBe(join(out, "qa-receipt-2.json"));
   });
 
+  it("writes a segmentation overlay plus one mask file per detection", async () => {
+    const out = join(dir, "segment");
+    const presented = await present(
+      "media_segment",
+      { path: "/c.mp4", output: out },
+      {
+        path: "/c.mp4",
+        time: 1,
+        width: 8,
+        height: 4,
+        engine: "yolo11n-seg",
+        device: "cuda:0",
+        ms: 12,
+        detections: [
+          { cls: "person", cls_id: 0, conf: 0.9, bbox: [0, 0, 4, 4], area: 10, mask: png(11) },
+          { cls: "Bed Room!", cls_id: 59, conf: 0.5, bbox: [4, 0, 8, 4], area: 5, mask: png(12) },
+        ],
+        overlay: png(13),
+        cached: false,
+      },
+    );
+    expect(presented.output).toEqual({
+      path: "/c.mp4",
+      time: 1,
+      width: 8,
+      height: 4,
+      engine: "yolo11n-seg",
+      device: "cuda:0",
+      ms: 12,
+      detections: [
+        { cls: "person", cls_id: 0, conf: 0.9, bbox: [0, 0, 4, 4], area: 10, mask: join(out, "mask-person-0.png") },
+        { cls: "Bed Room!", cls_id: 59, conf: 0.5, bbox: [4, 0, 8, 4], area: 5, mask: join(out, "mask-bed-room--1.png") },
+      ],
+      overlay: join(out, "overlay.png"),
+      cached: false,
+    });
+    expect(readFileSync(join(out, "overlay.png"))).toEqual(Buffer.from(png(13)));
+    expect(readFileSync(join(out, "mask-person-0.png"))).toEqual(Buffer.from(png(11)));
+    expect(presented.images).toEqual([{ path: join(out, "overlay.png"), png: png(13) }]);
+  });
+
   it("passes other results through untouched", async () => {
     expect(await present("check", { id: "x" }, { stats: {}, issues: [] })).toEqual({ output: { stats: {}, issues: [] }, images: [] });
   });
