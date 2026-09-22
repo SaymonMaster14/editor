@@ -12,7 +12,7 @@ import {
   formatMimeTypeLabel,
   formatAssetDate
 } from "@/utils/formatters";
-import { AssetInfoPreview } from "./asset-info-preview";
+import { SourceMonitorPanel } from "./source-monitor";
 import { supabase } from "@/lib/supabase";
 import { toClientConfig } from "@/components/genai/use-generation-records";
 import { useWorld } from "@diffusionstudio/koota-solid";
@@ -128,7 +128,7 @@ function AssetDetails() {
         <span class="text-base font-strong">Information</span>
       </div>
       <Show when={selection.asset()}>
-        {asset => <AssetInfoPreview asset={asset()} />}
+        {asset => <SourceMonitorPanel asset={asset()} />}
       </Show>
 
       <div class="flex flex-col gap-2 my-2">

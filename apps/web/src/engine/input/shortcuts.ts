@@ -37,6 +37,7 @@ import { zoomBy, zoomTo, zoomToFit, zoomToSelection } from '../camera';
 import { getDocumentEditor } from '../editor';
 import { groupSelection, ungroupSelection, unwrapSequenceSelection, wrapSelectionInScene, wrapSelectionInSequence } from '../group';
 import { getEditHistory } from '../history';
+import { insertEdit, markIn, markOut, overwriteEdit } from '../source-edit';
 import { splitAtPlayhead } from '../split';
 import { Keys, MODIFIER_KEYS, Pointer } from '../traits';
 import { editTransform } from './interactions';
@@ -61,6 +62,15 @@ export function redoEdit(world: World): void {
 	getEditHistory(world).redo();
 }
 
+/** Lands the monitor’s marked range at the playhead, rippling later clips aside (`,`). */
+export function insertMonitorRange(world: World): void {
+	insertEdit(world);
+}
+
+/** Lands the monitor’s marked range at the playhead where covered siblings give way (`.`). */
+export function overwriteMonitorRange(world: World): void {
+	overwriteEdit(world);
+}
 export function deleteSelection(world: World): void {
 	const selected = [...world.query(Selected)];
 
@@ -482,6 +492,12 @@ const PRESSED_SHORTCUTS: readonly Shortcut[] = [
 	{ keys: ['j', '!mod'], action: shuttle(-1) },
 	{ keys: ['k', '!mod'], action: stopActivePlayback },
 	{ keys: ['l', '!mod'], action: shuttle(1) },
+	// The source monitor's marks and landings, on the monitor's own range:
+	// the same trait the monitor UI and the source_edit tool read and write.
+	{ keys: ['i', '!mod'], action: markIn },
+	{ keys: ['o', '!mod'], action: markOut },
+	{ keys: [',', '!mod'], action: insertMonitorRange },
+	{ keys: ['.', '!mod'], action: overwriteMonitorRange },
 	{ keys: [']', '!mod'], action: restack('front') },
 	{ keys: ['[', '!mod'], action: restack('back') },
 	{ keys: ['\\', '!mod'], action: selectParents },

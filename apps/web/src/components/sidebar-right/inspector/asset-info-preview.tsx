@@ -18,7 +18,12 @@ type VisualAsset = Extract<Asset, { type: 'IMAGE' | 'VIDEO' | 'SEQUENCE' }>;
 
 const keyOf = (asset: Asset): string => `${asset.id}:${asset.stat?.mtime ?? ''}`;
 
-export function AssetInfoPreview(props: { asset: Asset }) {
+/**
+ * The source monitor’s picture: the asset playing, with its position
+ * reported out so the monitor trait follows what the human sees and the
+ * I/O marks land where the preview sits.
+ */
+export function AssetInfoPreview(props: { asset: Asset; onPosition?: (seconds: number) => void }) {
   const library = useLibrary();
   let mediaRef: HTMLMediaElement | undefined;
   let prevObjectUrl: string | undefined;
@@ -68,12 +73,17 @@ export function AssetInfoPreview(props: { asset: Asset }) {
     return (currentTime() / mediaDuration) * 100;
   });
 
+  const reportTime = (seconds: number) => {
+    setCurrentTime(seconds);
+    props.onPosition?.(seconds);
+  };
+
   const setProgress = (value: number) => {
     const mediaDuration = duration();
     if (mediaDuration === 0 || !mediaRef) return;
     const nextTime = (value / 100) * mediaDuration;
     mediaRef.currentTime = nextTime;
-    setCurrentTime(nextTime);
+    reportTime(nextTime);
   };
 
   const togglePlayback = () => {
@@ -139,10 +149,11 @@ export function AssetInfoPreview(props: { asset: Asset }) {
                   controls={false}
                   preload='metadata'
                   playsinline
-                  onTimeUpdate={(e) => setCurrentTime(e.currentTarget.currentTime)}
+                  onTimeUpdate={(e) => reportTime(e.currentTarget.currentTime)}
                   onLoadedMetadata={(e) => setDuration(e.currentTarget.duration)}
+                  onSeeked={(e) => reportTime(e.currentTarget.currentTime)}
                   onPlay={() => setPlaying(true)}
-                  onPause={() => setPlaying(false)}
+                  onPause={(e) => { setPlaying(false); reportTime(e.currentTarget.currentTime); } }
                   onEnded={() => setPlaying(false)}
                 />
               </Show>
@@ -165,10 +176,11 @@ export function AssetInfoPreview(props: { asset: Asset }) {
                   controls={false}
                   preload='metadata'
                   class="hidden"
-                  onTimeUpdate={(e) => setCurrentTime(e.currentTarget.currentTime)}
+                  onTimeUpdate={(e) => reportTime(e.currentTarget.currentTime)}
                   onLoadedMetadata={(e) => setDuration(e.currentTarget.duration)}
+                  onSeeked={(e) => reportTime(e.currentTarget.currentTime)}
                   onPlay={() => setPlaying(true)}
-                  onPause={() => setPlaying(false)}
+                  onPause={(e) => { setPlaying(false); reportTime(e.currentTarget.currentTime); } }
                   onEnded={() => setPlaying(false)}
                 />
               </Show>
