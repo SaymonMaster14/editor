@@ -1,0 +1,24 @@
+{
+  "name": "@diffusionstudio/track",
+  "version": "0.1.0",
+  "description": "Point tracking over decoded thumbnails: normalized cross-correlation template matching, forward and backward from a keyframe. Pure TypeScript, no DOM, no models — the renderer decodes; this package follows the pixels.",
+  "license": "MPL-2.0",
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "check": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "keywords": [
+    "tracking",
+    "template-matching",
+    "video-analysis"
+  ],
+  "devDependencies": {
+    "typescript": "~5.9.3",
+    "vitest": "^4.0.0"
+  }
+}

@@ -12,6 +12,7 @@ import { mediaFilmstrip } from "./media-filmstrip";
 import { mediaGrab } from "./media-grab";
 import { mediaListen } from "./media-listen";
 import { mediaScenes } from "./media-scenes";
+import { mediaTrack } from "./media-track";
 import { mediaTranscribe } from "./media-transcribe";
 
 /** The messages of a failed parse, keyed by the path they point at. */
@@ -162,5 +163,24 @@ describe("media_scenes", () => {
     expect(issues(input.safeParse({ path: "/c.mp4", threshold: 0 }))).toHaveProperty("threshold");
     expect(issues(input.safeParse({ path: "/c.mp4", minShotSeconds: -1 }))).toHaveProperty("minShotSeconds");
     expect(input.safeParse({ path: "/c.mp4", threshold: 0.5, minShotSeconds: 0 }).success).toBe(true);
+  });
+});
+
+describe("media_track", () => {
+  const input = mediaTrack.input;
+  const box = { x: 0.1, y: 0.2, width: 0.3, height: 0.25 };
+
+  it("parses a box with tracker defaults", () => {
+    const args = input.parse({ path: "/c.mp4", ...box });
+    expect(args.time).toBeUndefined();
+    expect(args.searchRadius).toBeUndefined();
+    expect(args.lostThreshold).toBeUndefined();
+  });
+
+  it("rejects boxes outside the unit frame and bad options", () => {
+    expect(issues(input.safeParse({ path: "/c.mp4", ...box, x: 0.9 }))).toHaveProperty("width");
+    expect(issues(input.safeParse({ path: "/c.mp4", ...box, searchRadius: 0 }))).toHaveProperty("searchRadius");
+    expect(issues(input.safeParse({ path: "/c.mp4", ...box, lostThreshold: 2 }))).toHaveProperty("lostThreshold");
+    expect(input.safeParse({ path: "/c.mp4", time: 1.5, ...box }).success).toBe(true);
   });
 });

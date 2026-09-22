@@ -186,6 +186,24 @@ media
   );
 
 media
+  .command("track")
+  .description(describe("media_track"))
+  .argument("<path>", field("media_track", "path"))
+  .option("-t, --time <s>", field("media_track", "time"), numeric)
+  .option("--x <n>", field("media_track", "x"), numeric)
+  .option("--y <n>", field("media_track", "y"), numeric)
+  .option("--width <n>", field("media_track", "width"), numeric)
+  .option("--height <n>", field("media_track", "height"), numeric)
+  .option("--search-radius <px>", field("media_track", "searchRadius"), numeric)
+  .option("--lost-threshold <n>", field("media_track", "lostThreshold"), numeric)
+  .action(
+    (
+      ref: string,
+      opts: { time?: number; x: number; y: number; width: number; height: number; searchRadius?: number; lostThreshold?: number },
+    ) => run("media_track", { path: assetPath(ref), ...opts }),
+  );
+
+media
   .command("transcribe")
   .description(describe("media_transcribe"))
   .argument("<path>", field("media_transcribe", "path"))
