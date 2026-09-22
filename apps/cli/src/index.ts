@@ -159,6 +159,31 @@ program
     }),
   );
 program
+  .command("source")
+  .description(describe("source_edit"))
+  .argument("<op>", "load, markIn, markOut, scrub, insert, overwrite, or range")
+  .argument("[asset]", field("source_edit", "asset"))
+  .option("--at <time>", field("source_edit", "at"))
+  .option("--in <time>", field("source_edit", "in"))
+  .option("--out <time>", field("source_edit", "out"))
+  .option("--frame <n>", field("source_edit", "frame"), numeric)
+  .option("--parent <id>", field("source_edit", "parent"))
+  .action((
+    op: ToolInput<"source_edit">["op"],
+    asset: string | undefined,
+    opts: { at?: string; in?: string; out?: string; frame?: number; parent?: string },
+  ) =>
+    run("source_edit", {
+      op,
+      ...(asset ? { asset } : {}),
+      ...(opts.at !== undefined ? { at: opts.at } : {}),
+      ...(opts.in !== undefined ? { in: opts.in } : {}),
+      ...(opts.out !== undefined ? { out: opts.out } : {}),
+      ...(opts.frame !== undefined ? { frame: opts.frame } : {}),
+      ...(opts.parent ? { parent: opts.parent } : {}),
+    }),
+  );
+program
   .command("qa-sweep")
   .alias("qa")
   .description(`${describe("qa_sweep")} Exits 1 when an error-severity finding is recorded.`)
