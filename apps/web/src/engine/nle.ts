@@ -186,16 +186,17 @@ export function rippleTrimPreviousToPlayhead(world: World, entity: Entity, frame
 	history.beginGesture();
 	try {
 		// Snapshot who closes up before the trim moves anything: Computed
-		// is system-derived and still holds the old timing in this call,
-		// so every landing is computed from these starts, never re-read.
-		// The clip itself returns to its old head; every sibling at or
-		// after it shifts earlier by the removed head.
+		// still holds the old timing in this call.
 		const closing = parent
 			? siblingsInTime(parent).filter((sibling) => clipSpan(sibling).start >= oldStart)
 			: [entity];
 		const starts = closing.map((sibling) => clipSpan(sibling).start);
 		trimIn(world, entity, frame);
+		// The clip returns to its old head; every sibling at or after that
+		// head shifts earlier by the removed head.
+		moveEntityTo(world, entity, oldStart);
 		closing.forEach((sibling, index) => {
+			if (sibling === entity) return;
 			moveEntityTo(world, sibling, (starts[index] ?? oldStart) - delta);
 		});
 		return delta;
