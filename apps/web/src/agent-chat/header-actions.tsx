@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
+import { AccessMenu } from "./access-menu";
 import { HistoryMenu } from "./history-menu";
 
 type HeaderActionsProps = {
@@ -20,6 +21,7 @@ type HeaderActionsProps = {
 export function HeaderActions(props: HeaderActionsProps) {
   return (
     <div class="ml-auto flex items-center gap-1 relative z-30" style="-webkit-app-region: no-drag;">
+      <AccessMenu />
       <HistoryMenu projectId={props.projectId} chatId={props.chatId} onOpen={props.onOpenChat} />
       <Tooltip placement="bottom">
         <TooltipTrigger

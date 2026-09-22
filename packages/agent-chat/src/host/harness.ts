@@ -6,6 +6,7 @@
 // the question flow, the item ids, and the truncation of tool output.
 
 import { randomUUID } from "node:crypto";
+import { summarizePolicy } from "./policy";
 
 import type {
   ChatEvent,
@@ -20,6 +21,7 @@ import type {
   TurnStatus,
 } from "../protocol";
 import type { HostEnv } from "./env";
+import type { AccessPolicy } from "./policy";
 
 export type ResumeCursor =
   | { claude: { sessionId: string } }
@@ -37,6 +39,8 @@ export type OpenOptions = {
   resume?: ResumeCursor;
   mcp: McpConfig | null;
   instructions?: string;
+  /** Filesystem policy bound to `cwd`. Absent in tests: adapters default to project-only. */
+  access?: AccessPolicy;
   env: HostEnv;
   /** The first turn's emitter: for notices about how the session came up. */
   emit: Emit;
@@ -194,12 +198,21 @@ export class QuestionBox {
 }
 
 /** The instructions every chat appends, with the project folder filled in. */
-export function chatInstructions(cwd: string, custom?: string): string {
+export function chatInstructions(cwd: string, custom?: string, policy?: AccessPolicy): string {
   const base =
     `You are running in Diffusion Studio's chat panel. The open project is at \`${cwd}\`. ` +
     "The `diffusion` MCP tools act on it live — use `capture`/`check` to verify edits. " +
-    "Before deleting or overwriting source media, or acting outside this folder, ask first with a question.";
-  return custom ? `${base}\n\n${custom}` : base;
+    "Before deleting or overwriting source media, ask first with a question.";
+  const withCustom = custom ? `${base}\n\n${custom}` : base;
+  if (!policy || policy.mode === "full") {
+    return policy ? `${withCustom}\n\nAgent Access: full machine access — reads and writes anywhere.` : withCustom;
+  }
+  return (
+    `${withCustom}\n\nAgent Access: project-scoped. Writable filesystem roots:\n` +
+    `${summarizePolicy(policy)}\n` +
+    "Do not write, delete, move or rename anything outside these roots; reads elsewhere are fine. " +
+    "If wider access is needed, ask the user with a question."
+  );
 }
 
 /** The text a harness gets: the message, then the attached paths, one per line. */

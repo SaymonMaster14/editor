@@ -7,6 +7,7 @@
 // runs this in a utility process, a sandbox runs it under plain `node`;
 // neither is imported here.
 
+import { join } from "node:path";
 import { hydrateEnv } from "./env";
 import { AgentHost } from "./host";
 import { ClaudeHarness } from "./claude";
@@ -16,6 +17,7 @@ import { OpenCodeHarness } from "./opencode";
 import { DEFAULT_ORIGINS, startServer } from "./server";
 import { ChatStore } from "./store";
 
+import type { AccessState } from "../protocol";
 import type { Harness, McpConfig } from "./harness";
 
 export type AgentHostConfig = {
@@ -31,6 +33,8 @@ export type AgentHostConfig = {
   allowedOrigins?: string[];
   /** injected into every session */
   mcp: McpConfig | null;
+  /** initial access state; `access.json` under `dataDir` wins when it exists */
+  access?: AccessState;
   /** appended to each harness's system/developer prompt */
   instructions?: string;
   version: string;
@@ -57,6 +61,8 @@ export async function createAgentHost(config: AgentHostConfig): Promise<RunningA
     env,
     mcp: config.mcp,
     instructions: config.instructions,
+    access: config.access,
+    accessFile: join(config.dataDir, "access.json"),
     version: config.version,
     log,
   });
@@ -91,4 +97,6 @@ export { OpenCodeHarness } from "./opencode";
 export { MuseHarness } from "./muse";
 export { hydrateEnv, inheritedEnv, which, resolveBinary, killTree } from "./env";
 export type { Harness, HarnessSession, McpConfig, ResumeCursor, OpenOptions } from "./harness";
+export { buildPolicy, canonicalizePath, checkRead, checkWrite, decideToolAction, isWithinRoot, parseAccessState, scanShellCommand, summarizePolicy, writableRootsOf, readableRootsOf, DEFAULT_ACCESS } from "./policy";
+export type { AccessCheck, AccessDecision, AccessPolicy, ToolVerdict } from "./policy";
 export type { HostEnv } from "./env";

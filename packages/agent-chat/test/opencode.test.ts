@@ -143,6 +143,42 @@ describe("OpenCodeHarness", () => {
     await session.close();
   });
 
+  it("auto-allows in-project writes and refuses outside ones", async () => {
+    const { host, dir, logFile } = makeEnv(true);
+    const harness = new OpenCodeHarness();
+    const opened: string[] = [];
+    const session = await harness.open({ cwd: dir, model: "fake/a", mcp: null, env: host, emit: (event) => void opened.push(event.type) });
+    const inside = await session.send(`ASK-PERMISSION-ALLOW\n${join(dir, "note.txt")}`, "fake/b", (event) => void opened.push(event.type));
+    expect(inside).toEqual({ status: "completed" });
+    const outside = join(tmpdir(), `acp-outside-${process.pid}.txt`);
+    const refused = await session.send(`ASK-PERMISSION-DENY\n${outside}`, "fake/b", (event) => void opened.push(event.type));
+    expect(refused).toEqual({ status: "completed" });
+    const log = logLines(logFile).join("\n");
+    expect(log).toContain('"outcome":"selected","optionId":"allow"');
+    expect(log).toContain('"outcome":"cancelled"');
+    expect(opened).not.toContain("request.opened");
+    await session.close();
+  });
+
+  it("auto-allows everything under full access", async () => {
+    const { host, dir, logFile } = makeEnv(true);
+    const harness = new OpenCodeHarness();
+    const opened: string[] = [];
+    const session = await harness.open({
+      cwd: dir,
+      model: "fake/a",
+      mcp: null,
+      access: { mode: "full", projectRoot: dir, roots: [] },
+      env: host,
+      emit: (event) => void opened.push(event.type),
+    });
+    const outcome = await session.send("ASK-PERMISSION", "fake/b", (event) => void opened.push(event.type));
+    expect(outcome).toEqual({ status: "completed" });
+    expect(logLines(logFile).join("\n")).toContain('"outcome":"selected","optionId":"allow"');
+    expect(opened).not.toContain("request.opened");
+    await session.close();
+  });
+
   it("interrupts a running turn", async () => {
     const { host, dir, logFile } = makeEnv(true);
     const harness = new OpenCodeHarness();

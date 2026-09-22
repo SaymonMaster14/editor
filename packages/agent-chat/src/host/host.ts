@@ -9,12 +9,15 @@
 // and they can come and go at any time without disturbing a turn.
 
 import { randomUUID } from "node:crypto";
+import { readFileSync, writeFileSync } from "node:fs";
 
 import { isPersistedEvent, reduce } from "../reduce";
 import { HARNESS_IDS, HARNESS_LABELS, isHarnessId, titleFor } from "../protocol";
 import { withAttachments, chatInstructions } from "./harness";
+import { buildPolicy, parseAccessState } from "./policy";
 
 import type {
+  AccessState,
   ChatEvent,
   ChatSnapshot,
   ChatSummary,
@@ -58,6 +61,10 @@ export type AgentHostOptions = {
   version: string;
   /** How long a session outlives its last turn. */
   idleMs?: number;
+  /** Initial access state; `accessFile` wins when it exists. */
+  access?: AccessState;
+  /** Persisted access state (`access.json` under the data dir). */
+  accessFile?: string;
   /** How old a probe may be before `refresh` re-runs it. */
   probeMaxAgeMs?: number;
   log?: (message: string) => void;
@@ -91,10 +98,12 @@ export class AgentHost {
   private probing: Promise<HarnessInfo[]> | null = null;
   private probeAbort: AbortController | null = null;
   private stopping = false;
+  private access: AccessState;
 
   constructor(options: AgentHostOptions) {
     this.options = options;
     for (const harness of options.harnesses) this.harnessById.set(harness.id, harness);
+    this.access = parseAccessState(options.access);
   }
 
   private log(message: string): void {
@@ -104,8 +113,9 @@ export class AgentHost {
   // ---------------------------------------------------------------------
   // Lifecycle
 
-  /** Loads the chat metas and settles anything a crash left running. */
+  /** Loads the access state and chat metas, and settles anything a crash left running. */
   async start(): Promise<void> {
+    this.loadAccess();
     for (const meta of await this.options.store.list()) {
       const chat = this.register(meta);
       if (meta.status !== "idle") {
@@ -191,6 +201,10 @@ export class AgentHost {
         return this.send(connection, p as MethodParams<"turn.send">) as Promise<R>;
       case "turn.interrupt":
         return this.interrupt(requireString(p, "chatId")) as Promise<R>;
+      case "access.get":
+        return { ...this.access, roots: this.access.roots.map((root) => ({ ...root })) } as R;
+      case "access.set":
+        return this.setAccess((p as MethodParams<"access.set">).access) as R;
       case "request.respond": {
         const { chatId, requestId, response } = p as MethodParams<"request.respond">;
         return this.respond(requireString({ chatId }, "chatId"), requireString({ requestId }, "requestId"), response) as R;
@@ -198,6 +212,34 @@ export class AgentHost {
       default:
         throw new HostError("bad-request", `Unknown method ${String(method)}`);
     }
+  }
+
+  // ---------------------------------------------------------------------
+  // Access
+
+  /** Reads the persisted state. Missing or corrupt means project-only: fail closed. */
+  private loadAccess(): void {
+    const file = this.options.accessFile;
+    if (!file) return;
+    try {
+      this.access = parseAccessState(JSON.parse(readFileSync(file, "utf8")));
+    } catch (error) {
+      this.log(`access file unreadable (${(error as Error)?.message ?? error}); staying project-only`);
+      this.access = parseAccessState(undefined);
+    }
+  }
+
+  private setAccess(next: unknown): AccessState {
+    this.access = parseAccessState(next);
+    const file = this.options.accessFile;
+    if (file) {
+      try {
+        writeFileSync(file, JSON.stringify(this.access, null, 2));
+      } catch (error) {
+        this.log(`access file unwritable (${(error as Error)?.message ?? error})`);
+      }
+    }
+    return { ...this.access, roots: this.access.roots.map((root) => ({ ...root })) };
   }
 
   // ---------------------------------------------------------------------
@@ -464,13 +506,15 @@ export class AgentHost {
     if (chat.session) return chat.session;
     const harness = this.harnessById.get(chat.meta.harness);
     if (!harness) throw new HostError("harness-unavailable", `${HARNESS_LABELS[chat.meta.harness]} is not available`);
+    const access = buildPolicy(chat.meta.cwd, this.access);
     const env = await this.options.env;
     const session = await harness.open({
       cwd: chat.meta.cwd,
       model,
       resume: chat.meta.resume ?? undefined,
       mcp: this.options.mcp,
-      instructions: chatInstructions(chat.meta.cwd, this.options.instructions),
+      access,
+      instructions: chatInstructions(chat.meta.cwd, this.options.instructions, access),
       env,
       emit,
     });

@@ -42,3 +42,5 @@ out/
 skills-lock.json
 .agents
 .claude
+# E2E evidence artifacts (proof scripts, captures, fixtures): kept on disk, never committed.
+tmp/

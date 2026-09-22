@@ -143,12 +143,74 @@ describe("MuseHarness", () => {
     await session.close();
   });
 
-  it("auto-decides approvals so allowAll turns never hang", async () => {
+  it("starts onRequest by default and allowAll only under full access", async () => {
+    const { host, dir, logFile } = makeEnv(true);
+    const harness = new MuseHarness();
+    const scoped = await harness.open({ cwd: dir, model: "fake/a", mcp: null, env: host, emit: () => {} });
+    await scoped.close();
+    expect(logLines(logFile).join("\n")).toContain("approval onRequest");
+    const full = await harness.open({
+      cwd: dir,
+      model: "fake/a",
+      mcp: null,
+      access: { mode: "full", projectRoot: dir, roots: [] },
+      env: host,
+      emit: () => {},
+    });
+    await full.close();
+    expect(logLines(logFile).join("\n")).toContain("approval allowAll");
+  });
+
+  it("silently approves in-project work and denies outside writes", async () => {
+    const { host, dir, logFile } = makeEnv(true);
+    const harness = new MuseHarness();
+    const opened: string[] = [];
+    const session = await harness.open({ cwd: dir, model: "fake/a", mcp: null, env: host, emit: (event) => void opened.push(event.type) });
+    const inside = await session.send(`ASK-APPROVAL-ALLOW\n${join(dir, "note.txt")}`, "fake/a", (event) => void opened.push(event.type));
+    expect(inside).toEqual({ status: "completed" });
+    const outside = join(tmpdir(), `muse-outside-${process.pid}.txt`);
+    const denied = await session.send(`ASK-APPROVAL-DENY\n${outside}`, "fake/a", (event) => void opened.push(event.type));
+    expect(denied).toEqual({ status: "completed" });
+    const log = logLines(logFile).join("\n");
+    expect(log).toContain("decide ap_1 yes");
+    expect(log).toContain("decide ap_1 no");
+    expect(opened).not.toContain("request.opened");
+    await session.close();
+  });
+
+  it("decides approvals delivered as bare notifications", async () => {
+    const { host, dir, logFile } = makeEnv(true);
+    const harness = new MuseHarness();
+    const opened: string[] = [];
+    const session = await harness.open({ cwd: dir, model: "fake/a", mcp: null, env: host, emit: (event) => void opened.push(event.type) });
+    const outcome = await session.send(`ASK-APPROVAL-NOTIFY\n${join(dir, "note.txt")}`, "fake/a", (event) => void opened.push(event.type));
+    expect(outcome).toEqual({ status: "completed" });
+    expect(logLines(logFile).join("\n")).toContain("decide ap_notify yes");
+    expect(opened).not.toContain("request.opened");
+    await session.close();
+  });
+
+  it("refetches choices via listPending instead of parking choiceless approvals", async () => {
     const { host, dir, logFile } = makeEnv(true);
     const harness = new MuseHarness();
     const session = await harness.open({ cwd: dir, model: "fake/a", mcp: null, env: host, emit: () => {} });
-    const outcome = await session.send("ASK-APPROVAL", "fake/a", () => {});
+    const outside = join(tmpdir(), `muse-choseless-${process.pid}.txt`);
+    const outcome = await session.send(`ASK-APPROVAL-CHOICELESS\n${outside}`, "fake/a", () => {});
     expect(outcome).toEqual({ status: "completed" });
+    const log = logLines(logFile).join("\n");
+    expect(log).toContain("request approval/listPending");
+    expect(log).toContain("decide ap_choseless no");
+    await session.close();
+  });
+
+  it("asks the user when the request carries no decidable path", async () => {
+    const { host, dir, logFile } = makeEnv(true);
+    const harness = new MuseHarness();
+    const session = await harness.open({ cwd: dir, model: "fake/a", mcp: null, env: host, emit: () => {} });
+    const pending = session.send("ASK-APPROVAL", "fake/a", (event) => {
+      if (event.type === "request.opened") session.respond(event.request.id, { answers: { ap_1: ["Allow"] } });
+    });
+    expect(await pending).toEqual({ status: "completed" });
     expect(logLines(logFile).join("\n")).toContain("decide ap_1 yes");
     await session.close();
   });

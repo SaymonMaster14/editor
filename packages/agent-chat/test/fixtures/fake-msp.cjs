@@ -20,6 +20,7 @@ let buffer = "";
 let initialized = false;
 let pendingTurn = null;
 let counter = 0;
+let pendingApprovals = [];
 
 function send(message) {
   process.stdout.write(JSON.stringify(message) + "\n");
@@ -107,6 +108,10 @@ function handle(message) {
       log(`decide ${params.approvalId} ${params.choiceId}`);
       send({ jsonrpc: "2.0", id, result: { commandId: params.commandId, status: "accepted", terminal: true } });
       break;
+    case "approval/listPending":
+      send({ jsonrpc: "2.0", id, result: { approvals: pendingApprovals } });
+      pendingApprovals = [];
+      break;
     case "userInput/answer":
       log(`answer ${JSON.stringify(params.answers)}`);
       send({ jsonrpc: "2.0", id, result: { commandId: params.commandId, status: "accepted" } });
@@ -153,9 +158,74 @@ function handle(message) {
         });
         break;
       }
+      if (text.includes("ASK-APPROVAL-NOTIFY")) {
+        // Notification-only delivery: no srv id, so no {} receipt is
+        // possible. The host must still decide via approval/decide.
+        const arg = text.split("\n")[1]?.trim() ?? "";
+        send({ jsonrpc: "2.0", id, result: { commandId: turnId, status: "accepted", turnId, startedNewTurn: true, disposition: "started" } });
+        send({
+          jsonrpc: "2.0",
+          method: "approval/requested",
+          params: {
+            approvalId: "ap_notify",
+            sessionId,
+            toolName: "edit",
+            subject: { title: "Edit file", kind: "fileAccess", path: arg },
+            availableChoices: [
+              { choiceId: "yes", decision: "approved", label: "Allow", scope: "once" },
+              { choiceId: "no", decision: "denied", label: "Deny", scope: "once" },
+            ],
+            currentRequirementId: { approvalId: "ap_notify", sourceIndex: 0 },
+          },
+        });
+        setTimeout(() => finishTurn(sessionId, turnId, "notify-flow"), 200);
+        break;
+      }
+      if (text.includes("ASK-APPROVAL-CHOICELESS")) {
+        // Choices arrive late: the request carries no choices, the full
+        // approval is only visible via approval/listPending.
+        const arg = text.split("\n")[1]?.trim() ?? "";
+        pendingTurn = { sessionId, turnId };
+        send({ jsonrpc: "2.0", id, result: { commandId: turnId, status: "accepted", turnId, startedNewTurn: true, disposition: "started" } });
+        pendingApprovals = [{
+          approvalId: "ap_choseless",
+          sessionId,
+          toolName: "edit",
+          subject: { title: "Edit file", kind: "fileAccess", path: arg },
+          availableChoices: [
+            { choiceId: "yes", decision: "approved", label: "Allow", scope: "once" },
+            { choiceId: "no", decision: "denied", label: "Deny", scope: "once" },
+          ],
+          currentRequirementId: { approvalId: "ap_choseless", sourceIndex: 0 },
+        }];
+        send({
+          jsonrpc: "2.0",
+          id: "srv-approval",
+          method: "approval/request",
+          params: {
+            approvalId: "ap_choseless",
+            sessionId,
+            toolName: "edit",
+            subject: { title: "Edit file", kind: "fileAccess", path: arg },
+            availableChoices: [],
+            currentRequirementId: { approvalId: "ap_choseless", sourceIndex: 0 },
+          },
+        });
+        setTimeout(() => {
+          if (!pendingTurn || pendingTurn.turnId !== turnId) return;
+          pendingTurn = null;
+          finishTurn(sessionId, turnId, "choseless-flow");
+        }, 200);
+        break;
+      }
       if (text.includes("ASK-APPROVAL")) {
         pendingTurn = { sessionId, turnId };
         send({ jsonrpc: "2.0", id, result: { commandId: turnId, status: "accepted", turnId, startedNewTurn: true, disposition: "started" } });
+        // ASK-APPROVAL-ALLOW / ASK-APPROVAL-DENY carry the subject path on the
+        // next line so policy decisions are exercised; bare ASK-APPROVAL sends
+        // a pathless shell request, which must surface to the user.
+        const arg = text.split("\n")[1]?.trim() ?? "";
+        const withSubject = text.includes("ASK-APPROVAL-ALLOW") || text.includes("ASK-APPROVAL-DENY");
         send({
           jsonrpc: "2.0",
           id: "srv-approval",
@@ -163,7 +233,8 @@ function handle(message) {
           params: {
             approvalId: "ap_1",
             sessionId,
-            toolName: "shell",
+            toolName: withSubject ? "edit" : "shell",
+            ...(withSubject ? { subject: { title: "Edit file", kind: "fileAccess", path: arg }, rawArgs: JSON.stringify({ file_path: arg }) } : {}),
             availableChoices: [
               { choiceId: "yes", decision: "approved", label: "Allow", scope: "once" },
               { choiceId: "no", decision: "denied", label: "Deny", scope: "once" },

@@ -100,13 +100,19 @@ function handle(message) {
       }
       if (text.includes("ASK-PERMISSION")) {
         pendingPrompt = { id, sessionId, afterPermission: true };
+        // ASK-PERMISSION-ALLOW / ASK-PERMISSION-DENY carry the target path on
+        // the next line; bare ASK-PERMISSION sends a pathless delete request.
+        const arg = text.split("\n")[1]?.trim() ?? "";
+        const withPath = text.includes("ASK-PERMISSION-ALLOW") || text.includes("ASK-PERMISSION-DENY");
         send({
           jsonrpc: "2.0",
           id: "srv-permission",
           method: "session/request_permission",
           params: {
             sessionId,
-            toolCall: { toolCallId: "tc_1", title: "Delete everything", kind: "delete" },
+            toolCall: withPath
+              ? { toolCallId: "tc_1", title: `Edit ${arg}`, kind: "edit", rawInput: { file_path: arg } }
+              : { toolCallId: "tc_1", title: "Delete everything", kind: "delete" },
             options: [
               { optionId: "allow", name: "Allow", kind: "allow_once" },
               { optionId: "deny", name: "Deny", kind: "reject_once" },

@@ -16,6 +16,7 @@ import {
   AgentChatError,
   emptyTranscript,
   reduce,
+  type AccessState,
   type ChatEvent,
   type ChatSnapshot,
   type ChatSummary,
@@ -45,6 +46,8 @@ export const draftKey = (projectId: string, chatId: string | null): string => ch
 type State = {
   connection: ConnectionState;
   harnesses: HarnessInfo[];
+  /** The agent filesystem access the host enforces; null until loaded. */
+  access: AccessState | null;
   /** Transcripts by chat id, for every chat opened this session. */
   chats: Record<string, Transcript>;
   /** History by project id, newest first. */
@@ -61,6 +64,7 @@ const CONNECT_TIMEOUT_MS = 4000;
 const [state, setState] = createStore<State>({
   connection: "closed",
   harnesses: [],
+  access: null,
   chats: {},
   lists: {},
   drafts: {},
@@ -110,7 +114,10 @@ let harnessesAt = 0;
 export function ensureConnected(): void {
   if (connected) return;
   connected = true;
-  client.onState((connection) => setState("connection", connection));
+  client.onState((connection) => {
+    setState("connection", connection);
+    if (connection === "open") refreshAccess();
+  });
   client.onHarnesses((harnesses) => {
     harnessesAt = Date.now();
     setState("harnesses", harnesses);
@@ -143,6 +150,23 @@ export function refreshHarnesses(): void {
   if (client.state !== "open" || Date.now() - harnessesAt < PROBE_MAX_AGE_MS) return;
   harnessesAt = Date.now();
   void client.request("harnesses.list", { refresh: true }).catch(() => {});
+}
+
+/** Loads the enforced access state; safe to call before the socket is open. */
+export function refreshAccess(): void {
+  if (client.state !== "open") return;
+  void client
+    .request("access.get", {})
+    .then((access) => setState("access", access))
+    .catch(() => {});
+}
+
+/** Persists new access state and returns what the host stored. Applies to newly opened sessions. */
+export async function setAccess(next: AccessState): Promise<AccessState> {
+  await whenOpen();
+  const stored = await client.request("access.set", { access: next });
+  setState("access", stored);
+  return stored;
 }
 
 export const readyHarnesses = (): HarnessInfo[] => state.harnesses.filter((harness) => harness.status === "ready");

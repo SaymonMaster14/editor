@@ -20,11 +20,13 @@ import { HARNESS_LABELS } from "../protocol";
 import { compareVersions, envGet, killTree, needsShell, parseVersion, quoteArg, resolveBinary, resolveMuseExecutable, runOnce } from "./env";
 import { JsonRpcPeer, RpcError } from "./jsonrpc";
 import { QuestionBox, newItemId, summarizeInput, toolTitle, truncateDetail } from "./harness";
+import { buildPolicy, decideToolAction } from "./policy";
 
 import type { ChildProcess } from "node:child_process";
 import type { HarnessCapabilities, HarnessInfo, Item, Question, RequestResponse } from "../protocol";
 import type { HostEnv } from "./env";
 import type { Emit, Harness, HarnessSession, OpenOptions, ResumeCursor, TurnOutcome } from "./harness";
+import type { AccessDecision, AccessPolicy } from "./policy";
 
 const MIN_VERSION = "1.0.0";
 const PROBE_TIMEOUT_MS = 30_000;
@@ -58,15 +60,76 @@ type MspItem = {
 };
 type MspItemParams = { sessionId?: string; itemId?: string; item?: MspItem; field?: string; delta?: string };
 type MspTurnCompleted = { turnId?: string; terminal?: string; error?: { message?: string }; reason?: string };
-type MspApprovalChoice = { choiceId?: string; decision?: string; label?: string; scope?: string };
-type MspApprovalRequest = {
+export type MspApprovalChoice = { choiceId?: string; decision?: string; label?: string; scope?: string };
+/** The approval subject union, as far as policy decisions read it: kind, path, command. */
+export type MspApprovalSubject = { title?: string; detail?: string; kind?: string; path?: string; command?: string; access?: string; target?: string; toolName?: string };
+export type MspApprovalRequest = {
   approvalId?: string;
   sessionId?: string;
   toolName?: string;
-  subject?: { title?: string; detail?: string };
+  rawArgs?: string;
+  subject?: MspApprovalSubject;
+  protectedWrite?: boolean;
   availableChoices?: MspApprovalChoice[];
   currentRequirementId?: { approvalId?: string; sourceIndex?: number };
 };
+
+/**
+ * Maps Diffusion access onto Muse: `allowAll`, or `onRequest` with host-side
+ * policy decisions.
+ *
+ * Proven live against 1.3.0: MSP does NOT gate file tools — `write_file`
+ * outside the workspace lands without any approval traffic in `onRequest`,
+ * `promptUnmatched`, and `denyUnmatched` alike. Only unresolved shell
+ * commands surface approvals, which the host answers from the access
+ * policy. So Muse honors the policy for shell, never for file writes:
+ * `writeRoots` is false and the matrix documents it.
+ */
+export type MusePolicy = { approvalMode: "allowAll" | "onRequest"; access: AccessPolicy };
+
+export function musePolicyFor(access: AccessPolicy | undefined, cwd: string): MusePolicy {
+  const policy = access ?? buildPolicy(cwd, { mode: "project", roots: [] });
+  return { approvalMode: policy.mode === "full" ? "allowAll" : "onRequest", access: policy };
+}
+
+/** Muse tool names that only read. Everything else file-shaped is checked as a write. */
+const MSP_READ_TOOLS = new Set(["read", "list", "glob", "grep", "search", "cat", "show", "stat"]);
+
+function mspInput(request: MspApprovalRequest): Record<string, unknown> {
+  const input: Record<string, unknown> = {};
+  const args = parseArgs(request.rawArgs);
+  if (args && typeof args === "object") Object.assign(input, args);
+  const subject = request.subject ?? {};
+  if (subject.path && typeof input.file_path !== "string" && typeof input.path !== "string") input.file_path = subject.path;
+  if (subject.command && typeof input.command !== "string") input.command = subject.command;
+  if (subject.target && typeof input.target !== "string") input.target = subject.target;
+  return input;
+}
+
+/**
+ * Decides one MSP approval against the access policy. In-project work is
+ * silent; outside writes are denied; anything the filesystem policy has no
+ * verdict for (network, unknown tools, pathless requests) goes to the user.
+ */
+export function decideMspApproval(policy: AccessPolicy, cwd: string, request: MspApprovalRequest): AccessDecision {
+  if (policy.mode === "full") return "allow";
+  const subject = request.subject ?? {};
+  if (subject.kind && subject.kind !== "fileAccess" && subject.kind !== "shell" && subject.kind !== "tool") return "ask";
+  const tool = (request.toolName ?? subject.toolName ?? "").toLowerCase();
+  const shellish = tool === "shell" || tool === "bash" || tool === "exec" || tool === "run" || tool === "command" || subject.kind === "shell";
+  if (shellish) {
+    const verdict = decideToolAction(policy, cwd, "Bash", mspInput(request));
+    if (verdict.decision === "allow" && verdict.paths.length === 0 && !subject.command && !subject.path) return "ask";
+    return verdict.decision;
+  }
+  if (MSP_READ_TOOLS.has(tool)) return decideToolAction(policy, cwd, "Read", mspInput(request)).decision;
+  if (subject.kind === "fileAccess" || subject.kind === "tool" || tool || subject.path) {
+    const verdict = decideToolAction(policy, cwd, "Write", mspInput(request));
+    if (verdict.decision === "allow" && verdict.paths.length === 0 && !subject.path) return "ask";
+    return verdict.decision;
+  }
+  return "ask";
+}
 type MspUserInputOption = { label?: string; description?: string };
 type MspUserInputQuestion = {
   id?: string;
@@ -168,16 +231,22 @@ class MuseSession implements HarnessSession {
   resume: ResumeCursor;
   private readonly child: ChildProcess;
   private readonly peer: JsonRpcPeer;
+  private readonly policy: MusePolicy;
+  private readonly cwd: string;
   private readonly sessionId: string;
   private currentModel: string | null;
   private turn: Turn | null = null;
   private questions: QuestionBox | null = null;
   private interrupting = false;
   private closed = false;
+  /** Approvals already answered or resolved in the current turn, so the request + requested + updated triple delivery decides exactly once. Cleared on every turn/start: a later turn may legitimately reuse an approval id. */
+  private readonly decidedApprovals = new Set<string>();
 
-  constructor(child: ChildProcess, peer: JsonRpcPeer, sessionId: string, currentModel: string | null) {
+  constructor(child: ChildProcess, peer: JsonRpcPeer, policy: MusePolicy, cwd: string, sessionId: string, currentModel: string | null) {
     this.child = child;
     this.peer = peer;
+    this.policy = policy;
+    this.cwd = cwd;
     this.sessionId = sessionId;
     this.currentModel = currentModel;
     this.resume = { muse: { sessionId } };
@@ -192,17 +261,18 @@ class MuseSession implements HarnessSession {
   static async start(options: OpenOptions, binary: string, version: string): Promise<MuseSession> {
     const child = spawnMspServer(binary, options.cwd, options.env.env);
     const peer = new JsonRpcPeer(child);
+    const policy = musePolicyFor(options.access, options.cwd);
     try {
       await handshake(peer, version);
       const resumeId = options.resume && "muse" in options.resume ? options.resume.muse.sessionId : null;
-      const { sessionId, currentModel, resumed } = await MuseSession.openSession(peer, options, resumeId);
+      const { sessionId, currentModel, resumed } = await MuseSession.openSession(peer, options, policy, resumeId);
       if (!resumed && resumeId) {
         options.emit({
           type: "item.completed",
           item: { id: newItemId("n"), kind: "notice", level: "info", text: "Previous Muse session not found — started fresh" },
         });
       }
-      return new MuseSession(child, peer, sessionId, currentModel);
+      return new MuseSession(child, peer, policy, options.cwd, sessionId, currentModel);
     } catch (error) {
       await killTree(child);
       throw error;
@@ -212,6 +282,7 @@ class MuseSession implements HarnessSession {
   private static async openSession(
     peer: JsonRpcPeer,
     options: OpenOptions,
+    policy: MusePolicy,
     resumeId: string | null,
   ): Promise<{ sessionId: string; currentModel: string | null; resumed: boolean }> {
     const config = { mcpServers: mcpServersOf(options.mcp?.url ?? null) };
@@ -220,7 +291,7 @@ class MuseSession implements HarnessSession {
         commandId: uuidv7(),
         modelId: options.model,
         workspaceRoot: options.cwd,
-        approvalMode: "allowAll",
+        approvalMode: policy.approvalMode,
         config,
       })) as MspSessionStart;
       if (!result.session?.sessionId) throw new Error("Muse did not return a session id");
@@ -265,6 +336,7 @@ class MuseSession implements HarnessSession {
       await this.peer.request("session/setModel", { commandId: uuidv7(), sessionId: this.sessionId, model: { modelId: model } });
       this.currentModel = model;
     }
+    this.decidedApprovals.clear();
     const result = (await this.peer.request("turn/start", {
       commandId: uuidv7(),
       sessionId: this.sessionId,
@@ -409,6 +481,22 @@ class MuseSession implements HarnessSession {
         } else this.finish({ status: "completed" });
         return;
       }
+      case "approval/requested":
+      case "approval/updated": {
+        // Same payload as approval/request: the server also delivers (and
+        // refreshes, e.g. when choices load late or the requirement rotates)
+        // approvals as notifications. Decided ids are skipped so the triple
+        // delivery answers exactly once.
+        const request = (params ?? {}) as MspApprovalRequest;
+        if (!request.approvalId || this.decidedApprovals.has(request.approvalId)) return;
+        void this.decideApproval(request).catch((error: unknown) => this.noteApprovalError(request, error));
+        return;
+      }
+      case "approval/resolved": {
+        const resolved = ((params ?? {}) as { approvalId?: string }).approvalId;
+        if (resolved) this.decidedApprovals.add(resolved);
+        return;
+      }
       default:
         // turn/started, approval/requested|resolved|updated,
         // userInput/requested|settled, session/*, usage/*, view/*: the
@@ -420,12 +508,16 @@ class MuseSession implements HarnessSession {
 
   private async onRequest(method: string, params: unknown): Promise<unknown> {
     switch (method) {
-      case "approval/request":
+      case "approval/request": {
         // The response is a presentation receipt only; the decision travels
-        // as `approval/decide`. Never expected with approvalMode "allowAll";
-        // approved at once so nothing hangs.
-        void this.decideApproval((params ?? {}) as MspApprovalRequest).catch(() => {});
+        // as `approval/decide`, which the access policy (or the user) drives.
+        // Failures surface as a chat notice: a swallowed approval error parks
+        // the turn forever with zero feedback, which is what a silent catch
+        // did to a live session before this notice existed.
+        const request = (params ?? {}) as MspApprovalRequest;
+        void this.decideApproval(request).catch((error: unknown) => this.noteApprovalError(request, error));
         return {};
+      }
       case "userInput/request":
         void this.answerUserInput((params ?? {}) as MspUserInputRequest).catch(() => {});
         return {};
@@ -435,16 +527,121 @@ class MuseSession implements HarnessSession {
   }
 
   private async decideApproval(request: MspApprovalRequest): Promise<void> {
-    const choices = request.availableChoices ?? [];
-    const approved = choices.find((choice) => choice.decision === "approved" && choice.scope === "once") ?? choices.find((choice) => choice.decision === "approved") ?? choices[0];
-    if (!request.approvalId || !approved?.choiceId || !request.currentRequirementId) return;
-    await this.peer.request("approval/decide", {
-      approvalId: request.approvalId,
-      choiceId: approved.choiceId,
-      commandId: uuidv7(),
-      requirementId: request.currentRequirementId,
-      sessionId: request.sessionId ?? this.sessionId,
+    const approvalId = request.approvalId;
+    if (!approvalId || this.decidedApprovals.has(approvalId)) return;
+    let choices = request.availableChoices ?? [];
+    let requirementId = request.currentRequirementId;
+    if (choices.length === 0 || !requirementId) {
+      // Choices can load after the request (the notification carries them):
+      // refresh from the pending list instead of parking the turn silently.
+      const fresh = await this.fetchPendingApproval(approvalId);
+      if (fresh?.availableChoices?.length) {
+        choices = fresh.availableChoices;
+        requirementId = fresh.currentRequirementId ?? requirementId;
+      }
+    }
+    if (!requirementId || choices.length === 0) {
+      throw new Error("Muse asked for approval but offered no choices to answer with.");
+    }
+    const live: MspApprovalRequest = { ...request, availableChoices: choices, currentRequirementId: requirementId };
+    const verdict = decideMspApproval(this.policy.access, this.cwd, live);
+    if (verdict === "ask") {
+      await this.askApproval(live, choices);
+      return;
+    }
+    const wanted = verdict === "allow" ? "approved" : "denied";
+    const pick =
+      choices.find((choice) => choice.decision === wanted && choice.scope === "once") ??
+      choices.find((choice) => choice.decision === wanted) ??
+      (verdict === "deny" ? choices.find((choice) => choice.decision === "abort") : undefined);
+    if (!pick?.choiceId) {
+      // No matching choice: the user picks explicitly rather than the host guessing.
+      await this.askApproval(live, choices);
+      return;
+    }
+    await this.sendDecision(live, pick.choiceId);
+  }
+
+  private async fetchPendingApproval(approvalId: string): Promise<MspApprovalRequest | null> {
+    try {
+      const result = (await this.peer.request("approval/listPending", { commandId: uuidv7(), sessionId: this.sessionId })) as {
+        approvals?: MspApprovalRequest[];
+      };
+      return (result.approvals ?? []).find((entry) => entry.approvalId === approvalId) ?? null;
+    } catch {
+      return null;
+    }
+  }
+
+  private async sendDecision(request: MspApprovalRequest, choiceId: string, retried = false): Promise<void> {
+    try {
+      await this.peer.request("approval/decide", {
+        approvalId: request.approvalId,
+        choiceId,
+        commandId: uuidv7(),
+        requirementId: request.currentRequirementId,
+        sessionId: request.sessionId ?? this.sessionId,
+      });
+      if (request.approvalId) this.decidedApprovals.add(request.approvalId);
+    } catch (error) {
+      // The requirement can rotate between delivery and decision (a fresh
+      // approval id supersedes it): refetch once and retry with the live
+      // requirement instead of leaving the turn parked.
+      const stale = /stale|requirement|superseded|32053/i.test(error instanceof Error ? error.message : String(error));
+      if (!retried && stale && request.approvalId) {
+        const fresh = await this.fetchPendingApproval(request.approvalId);
+        if (fresh?.currentRequirementId) {
+          await this.sendDecision({ ...request, currentRequirementId: fresh.currentRequirementId }, choiceId, true);
+          return;
+        }
+      }
+      throw error;
+    }
+  }
+
+  private noteApprovalError(request: MspApprovalRequest, error: unknown): void {
+    const turn = this.turn;
+    if (!turn) return;
+    const what = request.toolName ?? request.subject?.title ?? "Muse approval";
+    const message = error instanceof Error ? error.message : String(error);
+    turn.emit({
+      type: "item.completed",
+      item: { id: newItemId("n"), kind: "notice", level: "error", text: `${what}: the host could not answer the approval (${message}). Interrupt the turn and retry.` },
     });
+  }
+
+  private async askApproval(request: MspApprovalRequest, choices: MspApprovalChoice[]): Promise<void> {
+    const denied =
+      choices.find((choice) => choice.decision === "denied" && choice.scope === "once") ??
+      choices.find((choice) => choice.decision === "denied") ??
+      choices.find((choice) => choice.decision === "abort");
+    const box = this.questions;
+    if (!box) {
+      if (denied?.choiceId) await this.sendDecision(request, denied.choiceId);
+      return;
+    }
+    const subject = request.subject ?? {};
+    const what = [subject.title ?? request.toolName ?? "Muse asks to proceed", subject.path, subject.command, subject.detail]
+      .filter((part): part is string => !!part)
+      .join("\n");
+    const response = await box.ask([
+      {
+        id: request.approvalId!,
+        header: "Allow?",
+        question: what,
+        options: choices.map((choice) => ({ label: choice.label ?? choice.choiceId ?? "", description: choice.scope ?? "" })),
+        multiSelect: false,
+        allowOther: false,
+        secret: false,
+      },
+    ]);
+    if (response === "skip" || response === "cancel") {
+      if (denied?.choiceId) await this.sendDecision(request, denied.choiceId);
+      return;
+    }
+    const picked = response.answers[request.approvalId!]?.[0];
+    const choice = choices.find((entry) => (entry.label ?? entry.choiceId) === picked) ?? denied;
+    if (choice?.choiceId) await this.sendDecision(request, choice.choiceId);
   }
 
   private async answerUserInput(request: MspUserInputRequest): Promise<void> {
@@ -493,12 +690,19 @@ export class MuseHarness implements Harness {
     images: false,
     attachments: true,
     mcp: true,
-    approvals: false,
+    approvals: true,
     questions: true,
     interrupt: true,
     resume: true,
     models: true,
     sessions: true,
+    // `serve` ships a shell sandbox, but it is unverified and file tools are
+    // outside it entirely: the boundary is the approval layer, not a sandbox.
+    sandbox: false,
+    readRoots: true,
+    // Proven live: MSP never gates file tools, so the host cannot scope
+    // Muse file writes to roots. Shell approvals ARE policy-decided.
+    writeRoots: false,
   };
   private readonly version: string;
 

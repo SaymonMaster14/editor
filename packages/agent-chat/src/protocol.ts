@@ -40,7 +40,22 @@ export type HarnessCapabilities = {
   models: boolean;
   /** Named, persistent sessions (vs one-shot turns). */
   sessions: boolean;
+  /** The harness itself sandboxes writes (vs host tool-layer decisions). */
+  sandbox: boolean;
+  /** Extra read roots are honored for this harness. */
+  readRoots: boolean;
+  /** Extra write roots are honored for this harness. */
+  writeRoots: boolean;
 };
+
+/** "project": project root only. "full": the whole machine, by explicit opt-in. */
+export type AccessMode = "project" | "full";
+
+/** An approved folder outside the project. Read is always granted; write is opt-in. */
+export type RootGrant = { path: string; write: boolean };
+
+/** What the UI edits and the host persists. Bound to each chat's cwd at session open. */
+export type AccessState = { mode: AccessMode; roots: RootGrant[] };
 
 export type HarnessInfo = {
   id: HarnessId;
@@ -147,6 +162,8 @@ export type MethodMap = {
     result: { chatId: string };
   };
   "turn.interrupt": { params: { chatId: string }; result: void };
+  "access.get": { params: { unused?: never }; result: AccessState };
+  "access.set": { params: { access: AccessState }; result: AccessState };
   "request.respond": {
     params: { chatId: string; requestId: string; response: RequestResponse };
     result: void;

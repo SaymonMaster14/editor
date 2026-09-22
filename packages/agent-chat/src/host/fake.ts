@@ -153,6 +153,9 @@ export class FakeHarness implements Harness {
     resume: true,
     models: true,
     sessions: true,
+    sandbox: false,
+    readRoots: true,
+    writeRoots: true,
   };
   readonly options: FakeOptions;
   readonly sessions: FakeSession[] = [];

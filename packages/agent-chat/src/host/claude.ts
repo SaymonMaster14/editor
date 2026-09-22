@@ -14,6 +14,7 @@ import { query } from "@anthropic-ai/claude-agent-sdk";
 import { HARNESS_LABELS } from "../protocol";
 import { compareVersions, parseVersion, resolveBinary, resolveClaudeExecutable, runOnce } from "./env";
 import { QuestionBox, collectResult, newItemId, summarizeInput, toolTitle, truncateDetail } from "./harness";
+import { buildPolicy, decideToolAction } from "./policy";
 
 import type {
   CanUseTool,
@@ -29,6 +30,7 @@ import type {
 import type { HarnessCapabilities, HarnessInfo, Item, Question, RequestResponse } from "../protocol";
 import type { HostEnv } from "./env";
 import type { Emit, Harness, HarnessSession, OpenOptions, ResumeCursor, TurnOutcome } from "./harness";
+import type { AccessPolicy } from "./policy";
 
 const MIN_VERSION = "2.0.0";
 const PROBE_TIMEOUT_MS = 25_000;
@@ -78,8 +80,15 @@ export function claudeModels(rows: ClaudeModelRow[]): { models: { id: string; la
   return { models, defaultModel };
 }
 
-/** Which permission mode chats may use: bypass, unless a policy said no (§5.4). */
-type Policy = { mode: PermissionMode };
+/** Which permission mode a chat uses: bypass only by explicit opt-in, else default with host-side tool decisions. */
+export type ClaudePolicy = { mode: PermissionMode; access: AccessPolicy };
+
+/** Maps Diffusion access onto Claude: bypass only by explicit opt-in, else default mode with host-side tool decisions. */
+export function claudePolicyFor(access: AccessPolicy | undefined, cwd: string, fullRefused: boolean): ClaudePolicy {
+  const policy = access ?? buildPolicy(cwd, { mode: "project", roots: [] });
+  const full = policy.mode === "full" && !fullRefused;
+  return { mode: full ? "bypassPermissions" : "default", access: policy };
+}
 
 /** An async iterable that `send` feeds and the SDK drains. */
 class Queue<T> implements AsyncIterable<T> {
@@ -175,7 +184,8 @@ class ClaudeSession implements HarnessSession {
   readonly resume: ResumeCursor;
   private readonly options: OpenOptions;
   private readonly claudePath: string;
-  private readonly policy: Policy;
+  private policy: ClaudePolicy;
+  private readonly onFullRefused?: () => void;
   private readonly version: string;
   private readonly sessionId: string;
   private q: Query | null = null;
@@ -190,7 +200,8 @@ class ClaudeSession implements HarnessSession {
   /** Set once the resume cursor points at a session the CLI has written. */
   private started: boolean;
 
-  constructor(options: OpenOptions, claudePath: string, policy: Policy, version: string) {
+  constructor(options: OpenOptions, claudePath: string, policy: ClaudePolicy, version: string, onFullRefused?: () => void) {
+    this.onFullRefused = onFullRefused;
     this.options = options;
     this.claudePath = claudePath;
     this.policy = policy;
@@ -210,8 +221,10 @@ class ClaudeSession implements HarnessSession {
     this.stderr = "";
     const mcp = this.options.mcp;
     const bypass = this.policy.mode === "bypassPermissions";
+    const extraDirs = this.policy.access.roots.map((grant) => grant.path);
     const options: Options = {
       cwd: this.options.cwd,
+      ...(extraDirs.length ? { additionalDirectories: extraDirs } : {}),
       model,
       pathToClaudeCodeExecutable: this.claudePath,
       permissionMode: this.policy.mode,
@@ -272,7 +285,12 @@ class ClaudeSession implements HarnessSession {
   /** Steps the policy down when the CLI refused bypass; false when there is nothing left to try. */
   private tightenPolicy(): boolean {
     if (!isBypassRefused(this.stderr)) return false;
-    if (this.policy.mode === "bypassPermissions") this.policy.mode = "auto";
+    if (this.policy.mode === "bypassPermissions") {
+      // An org that refuses bypass gets project-scoped enforcement, not silent allow-all.
+      this.policy.mode = "auto";
+      this.policy.access = { ...this.policy.access, mode: "project" };
+      this.onFullRefused?.();
+    }
     else if (this.policy.mode === "auto") this.policy.mode = "default";
     else return false;
     return true;
@@ -338,11 +356,13 @@ class ClaudeSession implements HarnessSession {
     return { hookSpecificOutput: { hookEventName: "PreToolUse", permissionDecision: "deny", permissionDecisionReason: result.message } };
   };
 
-  /** Only reached outside bypass mode (§5.4): the question is the hook's; anything else is denied. */
+  /** Every tool call lands here (bypass is gone except under full access): the access policy decides. */
   private readonly canUseTool: CanUseTool = async (toolName, input, { signal }) => {
     if (toolName === ASK_USER_QUESTION) return this.askUser(input, signal);
-    if (this.policy.mode !== "bypassPermissions") {
-      return { behavior: "deny", message: "Your organization doesn't allow full access; this action was blocked." };
+    const verdict = decideToolAction(this.policy.access, this.options.cwd, toolName, input);
+    if (verdict.decision !== "allow") {
+      // "ask" fails closed too: headless, there is no CLI prompt to defer to, so the agent asks the user with a question.
+      return { behavior: "deny", message: verdict.reason ?? `The access policy blocked ${toolName}.` };
     }
     return { behavior: "allow", updatedInput: input };
   };
@@ -511,10 +531,13 @@ export class ClaudeHarness implements Harness {
     resume: true,
     models: true,
     sessions: true,
+    sandbox: false,
+    readRoots: true,
+    writeRoots: true,
   };
   private readonly version: string;
-  /** Remembered while the host runs: once a policy refused bypass, every chat starts lower. */
-  private readonly policy: Policy = { mode: "bypassPermissions" };
+  /** Remembered while the host runs: once an org refused bypass, every chat starts project-scoped. */
+  private fullRefused = false;
 
   constructor(version = "0.0.0") {
     this.version = version;
@@ -571,13 +594,16 @@ export class ClaudeHarness implements Harness {
   async open(options: OpenOptions): Promise<HarnessSession> {
     const binary = resolveBinary("claude", options.env);
     if (!binary) throw new Error("Claude Code is not installed");
-    if (this.policy.mode !== "bypassPermissions") {
+    const policy = claudePolicyFor(options.access, options.cwd, this.fullRefused);
+    if (options.access?.mode === "full" && policy.mode !== "bypassPermissions") {
       options.emit({
         type: "item.completed",
         item: { id: newItemId("n"), kind: "notice", level: "info", text: "Your organization doesn't allow full access. Some actions will be blocked." },
       });
     }
-    return new ClaudeSession(options, resolveClaudeExecutable(binary), this.policy, this.version);
+    return new ClaudeSession(options, resolveClaudeExecutable(binary), policy, this.version, () => {
+      this.fullRefused = true;
+    });
   }
 }
 

@@ -24,6 +24,9 @@ const CAPABILITY_KEYS: (keyof HarnessCapabilities)[] = [
   "resume",
   "models",
   "sessions",
+  "sandbox",
+  "readRoots",
+  "writeRoots",
 ];
 
 describe("harness registry", () => {

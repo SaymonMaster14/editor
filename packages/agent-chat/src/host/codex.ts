@@ -12,12 +12,14 @@ import { spawn } from "node:child_process";
 import { HARNESS_LABELS } from "../protocol";
 import { compareVersions, killTree, needsShell, parseVersion, quoteArg, resolveBinary } from "./env";
 import { JsonRpcPeer, RpcError } from "./jsonrpc";
+import { buildPolicy, checkWrite, decideToolAction, writableRootsOf } from "./policy";
 import { QuestionBox, newItemId, summarizeInput, truncateDetail } from "./harness";
 
 import type { ChildProcess } from "node:child_process";
 import type { HarnessCapabilities, HarnessInfo, Item, Question, RequestResponse } from "../protocol";
 import type { HostEnv } from "./env";
 import type { Emit, Harness, HarnessSession, OpenOptions, ResumeCursor, TurnOutcome } from "./harness";
+import type { AccessPolicy } from "./policy";
 
 const MIN_VERSION = "0.100.0";
 const PROBE_TIMEOUT_MS = 15_000;
@@ -61,12 +63,76 @@ type UserInputRequest = {
   itemId?: string;
   questions?: { id?: string; header?: string; question?: string; isOther?: boolean; isSecret?: boolean; options?: { label?: string; description?: string }[] | null }[];
 };
+// Approval requests carry no paths for file changes: the itemId keys the
+// fileChange item already announced via item/started + patchUpdated.
+type FileChangeApproval = { threadId?: string; turnId?: string; itemId?: string };
+type CommandApproval = { kind?: string; threadId?: string; turnId?: string; itemId?: string; command?: string | string[]; cwd?: string };
+type PatchUpdated = { threadId?: string; turnId?: string; itemId?: string; changes?: { path?: string; kind?: string }[] };
 
 const errorText = (error: { message?: string } | string | null | undefined): string | undefined =>
   typeof error === "string" ? error : error?.message;
 
-/** How the policy is spelled on every call: full access, or the sandbox when an admin said no (§5.4). */
-type Policy = { full: boolean };
+/** How the access policy is spelled on every call: full access only by explicit opt-in, else the approval gate. */
+export type CodexPolicy = {
+  full: boolean;
+  approval: "never" | "untrusted";
+  sandbox: "dangerFullAccess" | "workspaceWrite";
+  writableRoots: string[];
+  access: AccessPolicy;
+};
+
+/**
+ * Maps Diffusion access onto Codex: full access by explicit opt-in, else
+ * approval-gated project scope.
+ *
+ * The write boundary is the APPROVAL GATE, not the sandbox: with approval
+ * `untrusted` Codex asks the host before every file change and every shell
+ * command, and the host auto-decides against the canonical access policy
+ * (in-project writes auto-accept, outside writes auto-decline, unverifiable
+ * commands ask the user). The sandbox row is defense-in-depth only, because
+ * on Windows the workspace sandbox scopes the shell user but NOT the file
+ * tools — the live safety matrix proved outside file writes still succeed —
+ * while the sandboxed shell loses project access for non-admin users.
+ */
+export function codexPolicyFor(access: AccessPolicy | undefined, cwd: string, fullRefused: boolean): CodexPolicy {
+  const policy = access ?? buildPolicy(cwd, { mode: "project", roots: [] });
+  const full = policy.mode === "full" && !fullRefused;
+  return {
+    full,
+    approval: full ? "never" : "untrusted",
+    sandbox: full || process.platform === "win32" ? "dangerFullAccess" : "workspaceWrite",
+    writableRoots: writableRootsOf(policy),
+    access: policy,
+  };
+}
+
+/** Host verdict on one Codex approval request: accept/decline silently, or ask the user. */
+export type CodexApproval = "accept" | "decline" | "ask";
+
+export type CodexVerdict = { approval: CodexApproval; reason?: string };
+
+/** Pure file-change decision: every changed path must be writable, else decline; unknown items ask. */
+export function decideCodexFileChange(access: AccessPolicy, cwd: string, changes: { path?: string }[] | undefined, itemKnown: boolean): CodexVerdict {
+  if (access.mode === "full") return { approval: "accept" };
+  if (!itemKnown || !changes || changes.length === 0) {
+    return { approval: "ask", reason: "Codex wants to change files, but the host has not seen which paths this edit touches." };
+  }
+  for (const change of changes) {
+    if (!change.path) return { approval: "ask", reason: "Codex wants to change a file with no reported path." };
+    const check = checkWrite(access, change.path, cwd);
+    if (!check.allowed) return { approval: "decline", reason: `Write to ${change.path} is outside the writable roots.` };
+  }
+  return { approval: "accept" };
+}
+
+/** Pure shell decision: the canonical Bash verdict mapped onto accept/decline/ask. Relative paths resolve against Codex's reported cwd. */
+export function decideCodexCommand(access: AccessPolicy, cwd: string, command: string | string[], execCwd?: string): CodexVerdict {
+  const base = execCwd && execCwd.trim() ? execCwd : cwd;
+  const verdict = decideToolAction(access, base, "Bash", { command: Array.isArray(command) ? command.join(" ") : command });
+  if (verdict.decision === "allow") return { approval: "accept" };
+  if (verdict.decision === "deny") return { approval: "decline", reason: verdict.reason };
+  return { approval: "ask", reason: verdict.reason };
+}
 
 function threadIdOf(result: unknown): string | null {
   const record = (result ?? {}) as { thread?: { id?: string }; threadId?: string; id?: string };
@@ -99,7 +165,8 @@ type Turn = { id: string | null; emit: Emit; resolve(outcome: TurnOutcome): void
 
 class CodexSession implements HarnessSession {
   resume: ResumeCursor;
-  private readonly policy: Policy;
+  private readonly policy: CodexPolicy;
+  private readonly cwd: string;
   private readonly child: ChildProcess;
   private readonly peer: JsonRpcPeer;
   private threadId: string;
@@ -107,9 +174,12 @@ class CodexSession implements HarnessSession {
   private questions: QuestionBox | null = null;
   private interrupting = false;
   private closed = false;
+  /** Raw items by id, so file-change approvals (which carry no paths) can be decided against the item's changes. */
+  private readonly pendingItems = new Map<string, ThreadItem>();
 
-  constructor(policy: Policy, child: ChildProcess, peer: JsonRpcPeer, threadId: string) {
+  constructor(policy: CodexPolicy, cwd: string, child: ChildProcess, peer: JsonRpcPeer, threadId: string) {
     this.policy = policy;
+    this.cwd = cwd;
     this.child = child;
     this.peer = peer;
     this.threadId = threadId;
@@ -122,40 +192,43 @@ class CodexSession implements HarnessSession {
     };
   }
 
-  static async start(options: OpenOptions, policy: Policy, binary: string, version: string): Promise<CodexSession> {
+  static async start(options: OpenOptions, policy: CodexPolicy, binary: string, version: string, onFullRefused?: () => void): Promise<CodexSession> {
     const child = spawnAppServer(binary, options.cwd, options.env.env, options.mcp?.url ?? null);
     const peer = new JsonRpcPeer(child);
     try {
       await initialize(peer, version);
       const resumeId = options.resume && "codex" in options.resume ? options.resume.codex.threadId : null;
-      const threadId = await CodexSession.openThread(peer, options, policy, resumeId);
-      return new CodexSession(policy, child, peer, threadId);
+      const threadId = await CodexSession.openThread(peer, options, policy, resumeId, onFullRefused);
+      return new CodexSession(policy, options.cwd, child, peer, threadId);
     } catch (error) {
       await killTree(child);
       throw error;
     }
   }
 
-  private static threadParams(options: OpenOptions, policy: Policy, model: string) {
+  private static threadParams(options: OpenOptions, policy: CodexPolicy, model: string) {
     return {
       cwd: options.cwd,
       model,
-      approvalPolicy: "never",
-      sandbox: policy.full ? "danger-full-access" : "workspace-write",
+      approvalPolicy: policy.approval,
+      sandbox: policy.sandbox === "dangerFullAccess" ? "danger-full-access" : "workspace-write",
       developerInstructions: options.instructions,
     };
   }
 
-  private static async openThread(peer: JsonRpcPeer, options: OpenOptions, policy: Policy, resumeId: string | null): Promise<string> {
+  private static async openThread(peer: JsonRpcPeer, options: OpenOptions, policy: CodexPolicy, resumeId: string | null, onFullRefused?: () => void): Promise<string> {
     const start = async (): Promise<string> => {
       try {
         const id = threadIdOf(await peer.request("thread/start", CodexSession.threadParams(options, policy, options.model)));
         if (!id) throw new Error("Codex did not return a thread id");
         return id;
       } catch (error) {
-        // An admin that forbids full access: fall back to the sandbox, once.
+        // An admin that forbids full access: fall back to approval-gated project scope, once.
         if (policy.full && error instanceof RpcError && /sandbox|approval|danger|policy|not allowed|forbidden/i.test(error.message)) {
           policy.full = false;
+          policy.approval = "untrusted";
+          policy.sandbox = "workspaceWrite";
+          onFullRefused?.();
           options.emit({
             type: "item.completed",
             item: { id: newItemId("n"), kind: "notice", level: "info", text: "Your organization doesn't allow full access. Some actions will be blocked." },
@@ -193,8 +266,8 @@ class CodexSession implements HarnessSession {
           threadId: this.threadId,
           input: [{ type: "text", text }],
           model,
-          approvalPolicy: "never",
-          sandboxPolicy: this.policy.full ? { type: "dangerFullAccess" } : { type: "workspaceWrite" },
+          approvalPolicy: this.policy.approval,
+          sandboxPolicy: this.policy.sandbox === "dangerFullAccess" ? { type: "dangerFullAccess" } : { type: "workspaceWrite", writableRoots: this.policy.writableRoots },
         })
         .then((result) => {
           const record = (result ?? {}) as { turn?: { id?: string }; turnId?: string };
@@ -313,18 +386,44 @@ class CodexSession implements HarnessSession {
     }
   }
 
+  private rememberItem(raw: ThreadItem): void {
+    if (!raw.id) return;
+    this.pendingItems.set(raw.id, raw);
+    // Item ids are unique per turn; cap the map so a pathological session cannot grow it forever.
+    if (this.pendingItems.size > 500) {
+      const oldest = this.pendingItems.keys().next();
+      if (!oldest.done) this.pendingItems.delete(oldest.value);
+    }
+  }
+
   private onNotification(method: string, params: unknown): void {
     const turn = this.turn;
     switch (method) {
       case "item/started": {
-        const item = turn && this.toItem(((params ?? {}) as ItemNotification).item ?? {}, false);
+        const raw = ((params ?? {}) as ItemNotification).item ?? {};
+        this.rememberItem(raw);
+        const item = turn && this.toItem(raw, false);
         if (!turn || !item) return;
         turn.items.set(item.id, item);
         turn.emit({ type: "item.started", item });
         return;
       }
+      case "item/fileChange/patchUpdated": {
+        // Incremental patch detail for the pending fileChange item; merge it
+        // so the approval decision sees the full change list. No UI event:
+        // the item card already exists from item/started.
+        const { itemId, changes } = (params ?? {}) as PatchUpdated;
+        if (itemId && changes) {
+          const prev = this.pendingItems.get(itemId) ?? { id: itemId };
+          prev.changes = changes;
+          this.pendingItems.set(itemId, prev);
+        }
+        return;
+      }
       case "item/completed": {
-        const item = turn && this.toItem(((params ?? {}) as ItemNotification).item ?? {}, true);
+        const raw = ((params ?? {}) as ItemNotification).item ?? {};
+        if (raw.id) this.pendingItems.delete(raw.id);
+        const item = turn && this.toItem(raw, true);
         if (!turn || !item) return;
         turn.items.delete(item.id);
         turn.emit({ type: "item.completed", item });
@@ -375,15 +474,84 @@ class CodexSession implements HarnessSession {
   private async onRequest(method: string, params: unknown): Promise<unknown> {
     switch (method) {
       case "item/commandExecution/requestApproval":
+        return this.decideCommandApproval((params ?? {}) as CommandApproval);
       case "item/fileChange/requestApproval":
+        return this.decideFileApproval((params ?? {}) as FileChangeApproval);
       case "item/fileRead/requestApproval":
-        // Never expected with approvalPolicy "never"; answered at once so nothing hangs.
-        return { decision: this.policy.full ? "accept" : "decline" };
+        // Not in the published schema, but if a future server gates reads:
+        // reads are allowed everywhere by policy, so accept rather than hang.
+        return { decision: "accept" };
+      case "applyPatchApproval":
+      case "execCommandApproval":
+        // Legacy pre-item approval names. Auto-approve only under explicit
+        // full access; otherwise the user decides per action.
+        return this.decideLegacyApproval(method);
       case "item/tool/requestUserInput":
         return this.askUser((params ?? {}) as UserInputRequest);
       default:
         throw new RpcError({ code: -32601, message: `Unsupported request ${method}` });
     }
+  }
+
+  private async decideFileApproval(request: FileChangeApproval): Promise<unknown> {
+    const item = request.itemId ? this.pendingItems.get(request.itemId) : undefined;
+    const verdict = decideCodexFileChange(this.policy.access, this.cwd, item?.changes, !!item);
+    if (verdict.approval !== "ask") return { decision: verdict.approval };
+    const paths = (item?.changes ?? []).map((change) => change.path).filter((path): path is string => !!path);
+    return this.answerApproval(await this.askApproval("Codex wants to edit files", paths.length ? paths.join("\n") : (verdict.reason ?? "Unknown paths.")));
+  }
+
+  private async decideCommandApproval(request: CommandApproval): Promise<unknown> {
+    if (request.kind !== undefined && request.kind !== "command") {
+      // Non-command approvals sharing this method (e.g. stdin): the host
+      // cannot classify them, so the user decides.
+      return this.answerApproval(await this.askApproval("Codex asks for terminal interaction", `Kind: ${request.kind}`));
+    }
+    const command = request.command ?? "";
+    const verdict = decideCodexCommand(this.policy.access, this.cwd, command, request.cwd);
+    if (verdict.approval !== "ask") return { decision: verdict.approval };
+    const text = Array.isArray(command) ? command.join(" ") : command;
+    const detail = verdict.reason ? `${verdict.reason}\n${truncateDetail(text)}` : (truncateDetail(text) ?? text);
+    return this.answerApproval(await this.askApproval("Codex wants to run a command", detail));
+  }
+
+  private async decideLegacyApproval(method: string): Promise<unknown> {
+    if (this.policy.full) return { decision: "approved" };
+    const answer = await this.askApproval(
+      "Codex asks for approval",
+      `A legacy ${method} request arrived, which carries no structured paths. Allow it just this once, or deny it.`,
+    );
+    if (answer === "accept") return { decision: "approved" };
+    if (answer === "cancel") return { decision: "abort" };
+    return { decision: { denied: { rejection: "Denied: enable full machine access, or keep edits inside the project." } } };
+  }
+
+  private answerApproval(answer: "accept" | "decline" | "cancel"): unknown {
+    return { decision: answer };
+  }
+
+  /** One Allow-once / Deny card. Fails closed: no question box, skip, or deny all decline; cancel cancels. */
+  private async askApproval(title: string, detail: string): Promise<"accept" | "decline" | "cancel"> {
+    const box = this.questions;
+    if (!box) return "decline";
+    const response = await box.ask([
+      {
+        id: "approval",
+        header: "Allow?",
+        question: `${title}\n${detail}`,
+        options: [
+          { label: "Allow once", description: "Run just this action" },
+          { label: "Deny", description: "Block this action" },
+        ],
+        multiSelect: false,
+        allowOther: false,
+        secret: false,
+      },
+    ]);
+    if (response === "cancel") return "cancel";
+    if (response === "skip") return "decline";
+    const picked = response.answers["approval"] ?? [];
+    return picked.some((answer) => /allow/i.test(answer)) ? "accept" : "decline";
   }
 
   private async askUser(request: UserInputRequest): Promise<unknown> {
@@ -423,15 +591,23 @@ export class CodexHarness implements Harness {
     images: false,
     attachments: true,
     mcp: true,
-    approvals: false,
+    approvals: true,
     questions: true,
     interrupt: true,
     resume: true,
     models: true,
     sessions: true,
+    // The boundary is the approval gate, not an OS sandbox: Diffusion does
+    // not rely on the Codex sandbox to contain writes (on Windows it does
+    // not contain the file tools at all). Off Windows the workspace sandbox
+    // still runs as defense-in-depth.
+    sandbox: false,
+    readRoots: true,
+    writeRoots: true,
   };
   private readonly version: string;
-  private readonly policy: Policy = { full: true };
+  /** Remembered while the host runs: once an org refused full access, every chat starts sandboxed. */
+  private fullRefused = false;
 
   constructor(version = "0.0.0") {
     this.version = version;
@@ -476,12 +652,15 @@ export class CodexHarness implements Harness {
   async open(options: OpenOptions): Promise<HarnessSession> {
     const binary = resolveBinary("codex", options.env);
     if (!binary) throw new Error("Codex is not installed");
-    if (!this.policy.full) {
+    const policy = codexPolicyFor(options.access, options.cwd, this.fullRefused);
+    if (options.access?.mode === "full" && !policy.full) {
       options.emit({
         type: "item.completed",
         item: { id: newItemId("n"), kind: "notice", level: "info", text: "Your organization doesn't allow full access. Some actions will be blocked." },
       });
     }
-    return CodexSession.start(options, this.policy, binary, this.version);
+    return CodexSession.start(options, policy, binary, this.version, () => {
+      this.fullRefused = true;
+    });
   }
 }

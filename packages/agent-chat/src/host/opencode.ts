@@ -19,11 +19,13 @@ import { HARNESS_LABELS } from "../protocol";
 import { compareVersions, killTree, needsShell, quoteArg, resolveBinary, resolveOpencodeExecutable } from "./env";
 import { JsonRpcPeer, RpcError } from "./jsonrpc";
 import { QuestionBox, newItemId, summarizeInput, truncateDetail } from "./harness";
+import { buildPolicy, decideToolAction, isAbsolutePathLike, scanShellCommand } from "./policy";
 
 import type { ChildProcess } from "node:child_process";
 import type { HarnessCapabilities, HarnessInfo, Item, Question, RequestResponse } from "../protocol";
 import type { HostEnv } from "./env";
 import type { Emit, Harness, HarnessSession, OpenOptions, ResumeCursor, TurnOutcome } from "./harness";
+import type { AccessDecision, AccessPolicy } from "./policy";
 
 const MIN_VERSION = "1.0.0";
 const PROBE_TIMEOUT_MS = 25_000;
@@ -69,11 +71,62 @@ type SessionUpdate = {
   rawInput?: unknown;
   rawOutput?: unknown;
 };
-type PermissionRequest = {
+export type AcpPermissionRequest = {
   sessionId?: string;
-  toolCall?: { toolCallId?: string; title?: string; kind?: string };
+  toolCall?: { toolCallId?: string; title?: string; kind?: string; content?: AcpContentPart | AcpContentPart[]; rawInput?: unknown; locations?: { path?: string }[] };
   options?: { optionId?: string; name?: string; kind?: string }[];
 };
+
+/** OpenCode enforces at the approval layer: the session just carries the access policy. */
+export function opencodePolicyFor(access: AccessPolicy | undefined, cwd: string): AccessPolicy {
+  return access ?? buildPolicy(cwd, { mode: "project", roots: [] });
+}
+
+const ACP_READ_KINDS = ["read", "glob", "grep", "search", "list"];
+const ACP_MUTATING_KINDS = ["edit", "write", "create", "delete", "remove", "move", "execut", "bash", "shell", "command", "run", "patch", "appl"];
+
+function stringsOf(value: unknown, depth = 0): string[] {
+  if (typeof value === "string") return [value];
+  if (depth > 4 || value === null || value === undefined) return [];
+  if (Array.isArray(value)) return value.flatMap((entry) => stringsOf(entry, depth + 1));
+  if (typeof value === "object") return Object.values(value).flatMap((entry) => stringsOf(entry, depth + 1));
+  return [];
+}
+
+/**
+ * Decides one ACP permission request against the access policy. The request
+ * carries prose, not structured paths, so every scrap of text — title,
+ * content, raw input, locations — is scanned for paths and the paths decide.
+ * Reads are silent; in-root writes are silent; outside writes are refused;
+ * anything without path evidence goes to the user.
+ */
+export function decideAcpPermission(
+  policy: AccessPolicy,
+  cwd: string,
+  request: AcpPermissionRequest,
+): { decision: AccessDecision; paths: string[]; reason?: string } {
+  if (policy.mode === "full") return { decision: "allow", paths: [] };
+  const call = request.toolCall ?? {};
+  const kind = (call.kind ?? "").toLowerCase();
+  const texts = call.title ? [call.title] : [];
+  const contents = Array.isArray(call.content) ? call.content : call.content ? [call.content] : [];
+  for (const part of contents) if (part?.type === "text" && part.text) texts.push(part.text);
+  texts.push(...stringsOf(call.rawInput));
+  const candidates = new Set<string>();
+  for (const text of texts) {
+    for (const found of scanShellCommand(text)) candidates.add(found);
+    if (isAbsolutePathLike(text.trim())) candidates.add(text.trim());
+  }
+  for (const location of call.locations ?? []) if (location?.path) candidates.add(location.path);
+  const paths = [...candidates];
+  if (ACP_READ_KINDS.some((read) => kind.includes(read)) && !ACP_MUTATING_KINDS.some((mut) => kind.includes(mut))) {
+    return { decision: "allow", paths };
+  }
+  const shellish = ["execut", "bash", "shell", "command"].some((run) => kind.includes(run));
+  const verdict = decideToolAction(policy, cwd, shellish ? "Bash" : "Write", shellish ? { command: texts.join("\n") } : { file_path: paths });
+  if (verdict.decision === "allow" && paths.length === 0) return { decision: "ask", paths, reason: "no path evidence" };
+  return { decision: verdict.decision, paths, reason: verdict.reason };
+}
 
 type Turn = { emit: Emit; resolve(outcome: TurnOutcome): void; items: Map<string, Item> };
 
@@ -148,6 +201,8 @@ class OpenCodeSession implements HarnessSession {
   resume: ResumeCursor;
   private readonly child: ChildProcess;
   private readonly peer: JsonRpcPeer;
+  private readonly policy: AccessPolicy;
+  private readonly cwd: string;
   private readonly sessionId: string;
   private currentModel: string | null;
   private turn: Turn | null = null;
@@ -155,9 +210,11 @@ class OpenCodeSession implements HarnessSession {
   private interrupting = false;
   private closed = false;
 
-  constructor(child: ChildProcess, peer: JsonRpcPeer, sessionId: string, currentModel: string | null) {
+  constructor(child: ChildProcess, peer: JsonRpcPeer, policy: AccessPolicy, cwd: string, sessionId: string, currentModel: string | null) {
     this.child = child;
     this.peer = peer;
+    this.policy = policy;
+    this.cwd = cwd;
     this.sessionId = sessionId;
     this.currentModel = currentModel;
     this.resume = { opencode: { sessionId } };
@@ -185,7 +242,7 @@ class OpenCodeSession implements HarnessSession {
           item: { id: newItemId("n"), kind: "notice", level: "info", text: "Previous OpenCode session not found — started fresh" },
         });
       }
-      return new OpenCodeSession(child, peer, sessionId, currentModel);
+      return new OpenCodeSession(child, peer, opencodePolicyFor(options.access, options.cwd), options.cwd, sessionId, currentModel);
     } catch (error) {
       await killTree(child);
       throw error;
@@ -376,16 +433,28 @@ class OpenCodeSession implements HarnessSession {
   private async onRequest(method: string, params: unknown): Promise<unknown> {
     switch (method) {
       case "session/request_permission":
-        return this.askPermission((params ?? {}) as PermissionRequest);
+        return this.askPermission((params ?? {}) as AcpPermissionRequest);
       default:
         throw new RpcError({ code: -32601, message: `Unsupported request ${method}` });
     }
   }
 
-  private async askPermission(request: PermissionRequest): Promise<unknown> {
+  private async askPermission(request: AcpPermissionRequest): Promise<unknown> {
     const toolCallId = request.toolCall?.toolCallId ?? "permission";
     const options = request.options ?? [];
     const cancelled = { outcome: { outcome: "cancelled" } };
+    const verdict = decideAcpPermission(this.policy, this.cwd, request);
+    if (verdict.decision === "allow") {
+      // Auto-pick a one-shot allow; "always" is never automatic, and an
+      // unrecognized vocabulary falls through to the user below.
+      const allow =
+        options.find((entry) => /allow/i.test(entry.kind ?? "") && /once/i.test(entry.kind ?? "")) ??
+        (this.policy.mode === "full" ? options.find((entry) => /allow/i.test(`${entry.kind ?? ""} ${entry.name ?? ""}`)) : undefined) ??
+        options.find((entry) => /allow/i.test(`${entry.kind ?? ""} ${entry.name ?? ""}`) && /once|one/i.test(`${entry.kind ?? ""} ${entry.name ?? ""}`));
+      if (allow?.optionId) return { outcome: { outcome: "selected", optionId: allow.optionId } };
+    } else if (verdict.decision === "deny") {
+      return cancelled;
+    }
     const questions: Question[] = [
       {
         id: toolCallId,
@@ -421,6 +490,9 @@ export class OpenCodeHarness implements Harness {
     resume: true,
     models: true,
     sessions: true,
+    sandbox: false,
+    readRoots: false,
+    writeRoots: false,
   };
   private readonly version: string;
 
