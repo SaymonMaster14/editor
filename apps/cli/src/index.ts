@@ -279,6 +279,12 @@ media
   );
 
 media
+  .command("scopes")
+  .description(describe("media_scopes"))
+  .argument("<path>", field("media_scopes", "path"))
+  .action((ref: string) => run("media_scopes", { path: assetPath(ref) }));
+
+media
   .command("transcribe")
   .description(describe("media_transcribe"))
   .argument("<path>", field("media_transcribe", "path"))

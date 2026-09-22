@@ -30,6 +30,7 @@ import { mediaStabilize } from "./tools/media-stabilize";
 import { mediaReframe } from "./tools/media-reframe";
 import { mediaKey } from "./tools/media-key";
 import { mediaRetime } from "./tools/media-retime";
+import { mediaScopes } from "./tools/media-scopes";
 import { audioLoudness } from "./tools/audio-loudness";
 import { audioBeats } from "./tools/audio-beats";
 import { fonts } from "./tools/fonts";
@@ -61,6 +62,7 @@ export const catalog = [
   mediaReframe,
   mediaKey,
   mediaRetime,
+  mediaScopes,
   audioLoudness,
   audioBeats,
   models,

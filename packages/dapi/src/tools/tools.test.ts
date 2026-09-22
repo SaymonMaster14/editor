@@ -12,6 +12,7 @@ import { mediaFilmstrip } from "./media-filmstrip";
 import { mediaGrab } from "./media-grab";
 import { mediaKey } from "./media-key";
 import { mediaRetime } from "./media-retime";
+import { mediaScopes } from "./media-scopes";
 import { mediaListen } from "./media-listen";
 import { mediaScenes } from "./media-scenes";
 import { mediaTrack } from "./media-track";
@@ -257,5 +258,17 @@ describe("media_retime", () => {
     expect(issues(input.safeParse({ path: "/c.mp4", freeze: [{ at: 1, hold: -1 }] }))).toHaveProperty("freeze.0.hold");
     expect(issues(input.safeParse({ path: "/c.mp4", ramp: [{ time: 0, speed: 0 }] }))).toHaveProperty("ramp.0.speed");
     expect(input.safeParse({ path: "/c.mp4", speed: 0.5, reverse: true }).success).toBe(true);
+  });
+});
+describe("media_scopes", () => {
+  const input = mediaScopes.input;
+
+  it("parses a bare path", () => {
+    const args = input.parse({ path: "/c.mp4" });
+    expect(args.path).toBe("/c.mp4");
+  });
+
+  it("rejects a missing path", () => {
+    expect(issues(input.safeParse({}))).toHaveProperty("path");
   });
 });

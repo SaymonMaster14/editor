@@ -1,0 +1,28 @@
+{
+  "name": "@diffusionstudio/color",
+  "version": "0.1.0",
+  "description": "Color finishing math: scopes analysis (histogram, waveform bands, clipping, cast) plus grade operations (exposure, contrast, saturation, temperature, lift/gamma/gain). Pure TypeScript, no DOM — the renderer decodes; this package measures and grades.",
+  "license": "MPL-2.0",
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "check": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "keywords": [
+    "color",
+    "scopes",
+    "grading",
+    "video-analysis"
+  ],
+  "dependencies": {
+    "@diffusionstudio/scene": "*"
+  },
+  "devDependencies": {
+    "typescript": "~5.9.3",
+    "vitest": "^4.0.0"
+  }
+}
