@@ -18,11 +18,12 @@ export const timelineEdit = defineTool({
   name: "timeline_edit",
   title: "Edit the timeline",
   description:
-    "Run one canonical timeline edit on the open project (local, no credits): lift, extract (ripple delete), rippleTrimIn/Out/PreviousToPlayhead (Q), roll, slip, slide, move, trimIn, trimOut — plus undo, redo, and list (read back every clip's span). Targets are node ids (the id attributes in the project's JSX). Frame/delta are timeline frames at the project rate: frame is the destination for trim/move/roll/ripple ops, delta the shift for slip/slide. Multi-target lift/extract takes extra ids via targets. Reports the resulting spans so the caller can verify without re-reading the file.",
+    "Run one canonical timeline edit on the open project (local, no credits): lift, extract (ripple delete), split (at frame, or at the playhead with no target), rippleTrimIn/Out/PreviousToPlayhead (Q), roll, slip, slide, move, trimIn, trimOut — plus undo, redo, and list (read back every clip's span). Targets are node ids (the id attributes in the project's JSX). Frame/delta are timeline frames at the project rate: frame is the destination for trim/move/roll/ripple/split ops, delta the shift for slip/slide. Multi-target lift/extract takes extra ids via targets. Reports the resulting spans so the caller can verify without re-reading the file.",
   input: z.object({
     op: z.enum([
       "lift",
       "extract",
+      "split",
       "rippleTrimIn",
       "rippleTrimOut",
       "rippleTrimPreviousToPlayhead",

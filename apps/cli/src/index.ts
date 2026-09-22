@@ -152,7 +152,7 @@ program
 program
   .command("timeline")
   .description(describe("timeline_edit"))
-  .argument("<op>", "lift, extract, rippleTrimIn, rippleTrimOut, rippleTrimPreviousToPlayhead, roll, slip, slide, move, trimIn, trimOut, undo, redo, or list")
+  .argument("<op>", "lift, extract, split, rippleTrimIn, rippleTrimOut, rippleTrimPreviousToPlayhead, roll, slip, slide, move, trimIn, trimOut, undo, redo, or list")
   .argument("[target]", field("timeline_edit", "target"))
   .option("--frame <n>", field("timeline_edit", "frame"), numeric)
   .option("--delta <n>", field("timeline_edit", "delta"), numeric)

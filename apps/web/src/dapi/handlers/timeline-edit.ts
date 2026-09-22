@@ -2,10 +2,11 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-import { getParentEntity, Name, Source } from "@diffusionstudio/runtime";
+import { Computed, getActiveEntity, getParentEntity, Name, Source, store } from "@diffusionstudio/runtime";
 import { DapiError } from "@diffusionstudio/dapi";
 import { getEditHistory } from "@/engine/history";
 import { clipSpan, extract, lift, rippleTrimIn, rippleTrimOut, rippleTrimPreviousToPlayhead, roll, siblingsInTime, slide, slip } from "@/engine/nle";
+import { splitAtPlayhead, splitClipAtFrame } from "@/engine/split";
 import { moveEntityTo, trimIn, trimOut } from "@/engine/timing";
 import { resolveNode } from "../lib/nodes";
 
@@ -34,6 +35,11 @@ export const timelineEdit: ToolHandler<"timeline_edit"> = async ({ op, target, f
     else history.redo();
     return { op, summary: `${op} applied`, spans: {} };
   }
+  if (op === "split" && !target) {
+    const tails = splitAtPlayhead(world);
+    if (tails.length === 0) throw new DapiError("invalid-input", "nothing under the playhead to split.");
+    return { op, summary: `split ${tails.length} clip(s) at the playhead`, spans: spansOf(world, tails) };
+  }
   if (!target) throw new DapiError("invalid-input", `${op} needs target (a node id).`);
   const node = resolveNode(world, target);
   const extra = (targets ?? []).map((id) => resolveNode(world, id));
@@ -49,6 +55,17 @@ export const timelineEdit: ToolHandler<"timeline_edit"> = async ({ op, target, f
   }
 
   switch (op) {
+    case "split": {
+      let at = frame;
+      if (at === undefined) {
+        const scene = getActiveEntity(world);
+        if (scene === null) throw new DapiError("invalid-input", "split needs frame or an open scene to take the playhead from.");
+        at = store(world, Computed).localTime[scene.id()] ?? 0;
+      }
+      const tail = splitClipAtFrame(world, node, at);
+      if (!tail) throw new DapiError("invalid-input", `frame ${at} is not inside "${target}".`);
+      return { op, target, summary: `split ${target} at frame ${at}`, spans: spansOf(world, [node, tail]) };
+    }
     case "lift": {
       // Named before they go: a removed entity's traits go with it, so
       // stamping the answer afterwards reads "?" off every one of them.
