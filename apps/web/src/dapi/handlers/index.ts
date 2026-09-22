@@ -8,6 +8,7 @@ import { qaSweep } from "./qa-sweep";
 import { context } from "./context";
 import { capture } from "./capture";
 import { check } from "./check";
+import { productionIntegrity } from "./production-integrity";
 import { exportScene } from "./export";
 import { models } from "./models";
 import { voices } from "./voices";
@@ -48,6 +49,7 @@ export const handlers: Handlers = {
   capture,
   check,
   qa_sweep: qaSweep,
+  production_integrity: productionIntegrity,
   export: exportScene,
   models,
   voices,

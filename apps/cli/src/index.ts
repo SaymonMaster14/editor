@@ -217,6 +217,30 @@ program
     }),
   );
 program
+  .command("production-integrity")
+  .description(describe("production_integrity"))
+  .argument("<op>", "check or record-escalation")
+  .option("--id <id>", field("production_integrity", "id"))
+  .option("--asset <path>", field("production_integrity", "asset"))
+  .option("--tool <tool>", field("production_integrity", "tool"))
+  .option("--reason <reason>", field("production_integrity", "reason"))
+  .option("--scope <element|scene|footage>", field("production_integrity", "scope"))
+  .option("--missing-capability <capability>", field("production_integrity", "missingCapability"))
+  .action((
+    op: ToolInput<"production_integrity">["op"],
+    opts: { id?: string; asset?: string; tool?: string; reason?: string; scope?: "element" | "scene" | "footage"; missingCapability?: string },
+  ) =>
+    run("production_integrity", {
+      op,
+      ...(opts.id !== undefined ? { id: opts.id } : {}),
+      ...(opts.asset !== undefined ? { asset: opts.asset } : {}),
+      ...(opts.tool !== undefined ? { tool: opts.tool } : {}),
+      ...(opts.reason !== undefined ? { reason: opts.reason } : {}),
+      ...(opts.scope !== undefined ? { scope: opts.scope } : {}),
+      ...(opts.missingCapability !== undefined ? { missingCapability: opts.missingCapability } : {}),
+    }),
+  );
+program
   .command("keyframe")
   .description(describe("keyframe"))
   .argument("<op>", "add, remove, move, set, or list")

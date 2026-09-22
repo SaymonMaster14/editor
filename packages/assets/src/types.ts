@@ -2,6 +2,7 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
+import type { ExternalEscalation } from './escalation';
 import type { AssetProvenance } from './provenance';
 
 /** Whatever hands out the asset's bytes: a real File on desktop, an OPFS
@@ -57,6 +58,8 @@ interface AssetBase {
 	generation?: AssetGeneration;
 	/** Where an import came from; round-trips through the manifest. */
 	provenance?: AssetProvenance;
+	/** Why externally produced bytes are legitimate here; round-trips through the manifest. */
+	escalation?: ExternalEscalation;
 	/**
 	 * Resolved on the fly for a `src` that names a path or URL outside the
 	 * library; lives in memory only and is never written to the manifest.

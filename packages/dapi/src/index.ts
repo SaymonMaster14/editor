@@ -31,6 +31,8 @@ export { FLOW_ENGINE_DIS, FLOW_ENGINE_RAFT, FLOW_ENGINE_VERSION_DIS, FLOW_ENGINE
 export type { FlowWorkerResult } from "./flow";
 
 export { INLINE_MAX_IMAGES, INLINE_MAX_BYTES, qaDelivery, selectSweepPositions, framePixelStats, detectLayoutIssues } from "./qa";
+export { DOMINANCE_THRESHOLD, classifyAssetRole, isAttributedRole, unionLength, dominantAsset, judgeScene, judgeProgram } from "./production-integrity";
+export type { IntegrityAssetRole, IntegrityAssetRef, IntegrityInterval, IntegritySceneFacts, DominantAsset, IntegrityIssueCode, IntegrityIssue, SceneVerdict, ProgramVerdict } from "./production-integrity";
 
 export { MCP_HOST, MCP_PORT, MCP_PATH, MCP_URL } from "./mcp";
 export { JSON_SCHEMA_DIALECT, toolJsonSchemas } from "./json-schema";

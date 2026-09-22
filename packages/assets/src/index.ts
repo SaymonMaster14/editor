@@ -11,6 +11,7 @@ export * from './library';
 export * from './browser';
 export * from './cache';
 export * from './provenance';
+export * from './escalation';
 export * from './providers';
 export * from './download';
 export * from './derive/peaks';

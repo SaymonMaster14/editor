@@ -202,7 +202,13 @@ export function chatInstructions(cwd: string, custom?: string, policy?: AccessPo
   const base =
     `You are running in Diffusion Studio's chat panel. The open project is at \`${cwd}\`. ` +
     "The `diffusion` MCP tools act on it live — use `capture`/`check` to verify edits. " +
-    "Before deleting or overwriting source media, ask first with a question.";
+    "Before deleting or overwriting source media, ask first with a question.\n\n" +
+    "Build natively first: Diffusion TSX/runtime primitives, then programmatic layers (Anime.js, HTML, SVG, canvas), " +
+    "then advanced native rendering (Three.js, WebGL/WebGPU, shaderPaint, GPU effects, analysis/tracking) — an external " +
+    "renderer only when Diffusion cannot reasonably represent the result, and then as one declared element, never as a " +
+    "flattened whole-scene substitute. Any externally produced asset needs a `production_integrity` record-escalation " +
+    "receipt (tool, reason, scope). Significant visual work is done only with structural proof: `check`, `capture`, and " +
+    "a `production_integrity` check with zero errors.";
   const withCustom = custom ? `${base}\n\n${custom}` : base;
   if (!policy || policy.mode === "full") {
     return policy ? `${withCustom}\n\nAgent Access: full machine access — reads and writes anywhere.` : withCustom;

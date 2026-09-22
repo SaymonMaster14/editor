@@ -10,6 +10,7 @@ import { context } from "./tools/context";
 import { capture } from "./tools/capture";
 import { check } from "./tools/check";
 import { qaSweep } from "./tools/qa-sweep";
+import { productionIntegrity } from "./tools/production-integrity";
 import { exportScene } from "./tools/export";
 import { assetsSearch } from "./tools/assets-search";
 import { assetsImport } from "./tools/assets-import";
@@ -56,6 +57,7 @@ export const catalog = [
   capture,
   check,
   qaSweep,
+  productionIntegrity,
   exportScene,
   timelineEdit,
   sourceEdit,
