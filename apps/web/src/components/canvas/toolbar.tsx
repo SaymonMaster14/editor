@@ -132,6 +132,18 @@ export function Toolbar() {
           </TooltipTrigger>
           <TooltipContent shortcut="T">Text</TooltipContent>
         </Tooltip>
+        <Tooltip>
+          <TooltipTrigger
+            as={Button}
+            size="icon-square"
+            variant={selectedTool() === ToolType.BLADE ? 'default' : 'ghost'}
+            onClick={() => handleToolChange(ToolType.BLADE)}
+            class={selectedTool() === ToolType.BLADE ? 'text-foreground' : 'text-muted-foreground'}
+          >
+            <Icon name="razor" />
+          </TooltipTrigger>
+          <TooltipContent shortcut="C">Razor</TooltipContent>
+        </Tooltip>
         <Separator
           orientation="vertical"
           class="data-[orientation=vertical]:h-5 rounded-md"

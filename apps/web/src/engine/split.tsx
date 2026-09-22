@@ -29,7 +29,8 @@ import {
 import { Or } from 'koota';
 
 import { getDocumentEditor } from './editor';
-import { cloneFramesForSplit, clonePeaksForSplit } from './timeline';
+import { cloneFramesForSplit } from './timeline/media';
+import { clonePeaksForSplit } from './timeline/peaks';
 import { trimIn, trimOut } from './timing';
 
 import type { Entity, World } from 'koota';
@@ -85,6 +86,32 @@ function splitUnits(world: World, targets: Entity[], frame: number): Entity[] {
 }
 
 /**
+ * One clip cut in two at `frame`: copied whole before anything is trimmed,
+ * so the copy is spelled from the whole clip and still runs to the end the
+ * whole clip ran to. Returns the halves, or null when the frame is not
+ * strictly inside the clip. The single cut both split verbs are built on.
+ */
+function splitOneAtFrame(world: World, entity: Entity, frame: number): { original: Entity; copy: Entity } | null {
+	const start = store(world, Computed).start[entity.id()] ?? 0;
+	const end = store(world, Computed).end[entity.id()] ?? 0;
+	if (!(start < frame && frame < end)) return null;
+
+	const editor = getDocumentEditor(world);
+	const [pair] = editor.duplicateInPlace([entity]);
+	if (!pair) return null;
+
+	trimOut(world, pair.original, frame);
+	trimIn(world, pair.copy, frame);
+	handOffDecoders(world, pair.original, pair.copy);
+	// The two halves play the same source at the same zoom, so the copy
+	// starts with the waveform and thumbnails the whole clip had rather
+	// than decoding them all over again.
+	clonePeaksForSplit(pair.original.id(), pair.copy.id());
+	cloneFramesForSplit(pair.original.id(), pair.copy.id());
+	return pair;
+}
+
+/**
  * Cuts every clip the playhead is over in two. Returns the tail halves, which
  * are what the selection is left on: they are the new elements, and carrying
  * on from the cut is the usual next thing to do to them.
@@ -97,27 +124,19 @@ export function splitAtPlayhead(world: World): Entity[] {
 	const units = splitUnits(world, splitTargets(world, scene), frame);
 	if (units.length === 0) return [];
 
-	const editor = getDocumentEditor(world);
-	// Copied before anything is trimmed, so each copy is spelled from the
-	// whole clip and still runs to the end the whole clip ran to.
-	const pairs = editor.duplicateInPlace(units);
-
-	for (const { original, copy } of pairs) {
-		trimOut(world, original, frame);
-		trimIn(world, copy, frame);
-		handOffDecoders(world, original, copy);
-		// The two halves play the same source at the same zoom, so the copy
-		// starts with the waveform and thumbnails the whole clip had rather
-		// than decoding them all over again.
-		clonePeaksForSplit(original.id(), copy.id());
-		cloneFramesForSplit(original.id(), copy.id());
+	const pairs: { original: Entity; copy: Entity }[] = [];
+	for (const entity of units) {
+		const pair = splitOneAtFrame(world, entity, frame);
+		if (pair) pairs.push(pair);
 	}
+	if (pairs.length === 0) return [];
 
 	// Two clips side by side under a scene are two layers of the timeline,
 	// where a sequence's children are one row: the halves are wrapped so a
 	// clip that was cut still reads as the one clip it was. A parent that
 	// already groups its children (a group, or a sequence — every sequence is
 	// a group) does that for them.
+	const editor = getDocumentEditor(world);
 	for (const { original, copy } of pairs) {
 		const parent = getParentEntity(original);
 		if (parent === null || isGroup(parent)) continue;
@@ -129,4 +148,28 @@ export function splitAtPlayhead(world: World): Entity[] {
 	if (copies.length > 0) editor.select(copies);
 
 	return copies;
+}
+
+/**
+ * The razor's cut: one clip in two at an arbitrary frame (where the blade
+ * landed rather than where the playhead is). Returns the tail half, or null
+ * when the frame is not strictly inside the clip.
+ */
+export function splitClipAtFrame(world: World, entity: Entity, frame: number): Entity | null {
+	const pair = splitOneAtFrame(world, entity, frame);
+	if (!pair) return null;
+
+	// Two clips side by side under a scene are two layers of the timeline,
+	// where a sequence's children are one row: the halves are wrapped so a
+	// clip that was cut still reads as the one clip it was. A parent that
+	// already groups its children (a group, or a sequence — every sequence is
+	// a group) does that for them.
+	const editor = getDocumentEditor(world);
+	const parent = getParentEntity(pair.original);
+	if (parent !== null && !isGroup(parent)) {
+		editor.wrap([pair.original, pair.copy], () => <Sequence name={getNextName(world, 'Sequence')} />);
+	}
+
+	editor.select([pair.copy]);
+	return pair.copy;
 }

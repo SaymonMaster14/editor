@@ -41,6 +41,7 @@ import { getEditHistory } from '../history';
 import { deleteKeyframe } from '../keyframes';
 import { insertEdit, markIn, markOut, overwriteEdit } from '../source-edit';
 import { addMarker, seekMarker } from '../markers';
+import { rippleDeleteSelection, rippleTrimNextToPlayhead, rippleTrimPrevToPlayhead } from '../nle-actions';
 import { splitAtPlayhead } from '../split';
 import { Keys, MODIFIER_KEYS, Pointer } from '../traits';
 import { editTransform } from './interactions';
@@ -64,16 +65,31 @@ export function undoEdit(world: World): void {
 export function redoEdit(world: World): void {
 	getEditHistory(world).redo();
 }
-
 /** Lands the monitor’s marked range at the playhead, rippling later clips aside (`,`). */
 export function insertMonitorRange(world: World): void {
 	insertEdit(world);
+}
+
+/** Ripple-deletes the selection, closing the gap (⇧⌫). */
+export function rippleDelete(world: World): void {
+	rippleDeleteSelection(world);
+}
+
+/** Q — trims the previous edit to the playhead, closing the gap. */
+export function rippleTrimPrev(world: World): void {
+	rippleTrimPrevToPlayhead(world);
+}
+
+/** W — trims the next edit to the playhead, closing the gap. */
+export function rippleTrimNext(world: World): void {
+	rippleTrimNextToPlayhead(world);
 }
 
 /** Lands the monitor’s marked range at the playhead where covered siblings give way (`.`). */
 export function overwriteMonitorRange(world: World): void {
 	overwriteEdit(world);
 }
+
 /** Pins a flag at the playhead, or updates the one standing there (M). */
 export function addMarkerAtPlayhead(world: World): void {
 	addMarker(world);
@@ -479,8 +495,10 @@ function deselect(world: World): void {
 const PRESSED_SHORTCUTS: readonly Shortcut[] = [
 	{ keys: ['z', 'mod', '!shift'], action: undoEdit },
 	{ keys: ['z', 'mod', 'shift'], action: redoEdit },
-	{ keys: ['backspace'], action: deleteSelection },
-	{ keys: ['delete'], action: deleteSelection },
+	{ keys: ['backspace', '!shift'], action: deleteSelection },
+	{ keys: ['delete', '!shift'], action: deleteSelection },
+	{ keys: ['backspace', 'shift'], action: rippleDelete },
+	{ keys: ['delete', 'shift'], action: rippleDelete },
 	{ keys: ['d', 'mod', '!shift'], action: duplicateSelection },
 	{ keys: ['g', 'mod', '!shift'], action: groupSelection },
 	{ keys: ['g', 'mod', 'shift'], action: ungroupSelection },
@@ -506,8 +524,11 @@ const PRESSED_SHORTCUTS: readonly Shortcut[] = [
 	{ keys: ['r', '!mod'], action: selectTool(ToolType.RECT) },
 	{ keys: ['a', '!mod'], action: seekFrames(-1) },
 	{ keys: ['d', '!mod'], action: seekFrames(1) },
-	{ keys: ['w', '!mod'], action: seekSeconds(1) },
-	{ keys: ['s', '!mod'], action: seekSeconds(-1) },
+	{ keys: ['w', 'shift', '!mod'], action: seekSeconds(1) },
+	{ keys: ['s', 'shift', '!mod'], action: seekSeconds(-1) },
+	{ keys: ['q', '!mod'], action: rippleTrimPrev },
+	{ keys: ['w', '!mod', '!shift'], action: rippleTrimNext },
+	{ keys: ['c', '!mod'], action: selectTool(ToolType.BLADE) },
 	{ keys: [';', '!mod'], action: seekSelectionEdge('start') },
 	{ keys: ["'", '!mod'], action: seekSelectionEdge('end') },
 	// fn ←/→ on macOS, Home/End elsewhere.

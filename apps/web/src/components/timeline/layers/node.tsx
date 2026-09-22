@@ -37,6 +37,8 @@ import {
 } from '@/components/ui/context-menu';
 import { Tooltip, TooltipContent, TooltipPortal, TooltipTrigger } from '@/components/ui/tooltip';
 import { useEditor } from '@/engine/hooks';
+import { liftSelection, rippleDeleteSelection } from '@/engine/nle-actions';
+import { splitAtPlayhead } from '@/engine/split';
 import { DEFAULT_CLIP_HEIGHT, MAX_CLIP_HEIGHT, MIN_CLIP_HEIGHT, getClipFallbackName } from '@/engine/timeline';
 import { NESTED_INDENT_PX } from './config';
 import { useLayerContext } from './context';
@@ -139,7 +141,9 @@ export function NodeLayer(props: LayerRowProps) {
   };
 
   const handleRemove = () => editor.remove(entity());
-
+  const handleSplitAtPlayhead = () => splitAtPlayhead(world);
+  const handleLift = () => liftSelection(world);
+  const handleRippleDelete = () => rippleDeleteSelection(world);
   /**
    * The column reads top-down while the file reads bottom-up: the last child
    * of an element is the one drawn on top, so "front" is the end of the file
@@ -198,6 +202,12 @@ export function NodeLayer(props: LayerRowProps) {
         onPointerEnter={() => setRowHover(world, entity())}
         onPointerLeave={() => setRowHover(world, null)}
         onPointerDown={handleRowPointerDown}
+        onContextMenu={() => {
+          // The menu acts on the selection: a right-click on an unselected
+          // row selects it first, so Lift/Ripple Delete hit what was
+          // clicked. A row inside an existing selection keeps the group.
+          if (!selected()) editor.select(entity());
+        }}
         classList={{
           'bg-accent': selected(),
           'bg-accent/70': !selected() && hovering() && resized() === null && drag.dragging() === null,
@@ -327,7 +337,21 @@ export function NodeLayer(props: LayerRowProps) {
         </div>
       </ContextMenuTrigger>
       <ContextMenuPortal>
-        <ContextMenuContent class="w-[160px]">
+        <ContextMenuContent class="w-[200px]">
+          <ContextMenuItem onSelect={handleSplitAtPlayhead}>
+            Split at playhead
+            <ContextMenuShortcut>⌘B</ContextMenuShortcut>
+          </ContextMenuItem>
+          <ContextMenuSeparator />
+          <ContextMenuItem onSelect={handleLift}>
+            Lift
+            <ContextMenuShortcut>⌫</ContextMenuShortcut>
+          </ContextMenuItem>
+          <ContextMenuItem onSelect={handleRippleDelete}>
+            Ripple delete
+            <ContextMenuShortcut>⇧⌫</ContextMenuShortcut>
+          </ContextMenuItem>
+          <ContextMenuSeparator />
           <ContextMenuItem onSelect={toggleMuted}>{muted() ? 'Unmute' : 'Mute'}</ContextMenuItem>
           <ContextMenuItem onSelect={toggleSoloed}>{soloed() ? 'Unsolo' : 'Solo'}</ContextMenuItem>
           <ContextMenuItem onSelect={toggleHidden}>{hidden() ? 'Unhide' : 'Hide'}</ContextMenuItem>

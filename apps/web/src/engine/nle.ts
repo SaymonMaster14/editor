@@ -169,6 +169,42 @@ export function rippleTrimIn(world: World, entity: Entity, frame: number): numbe
 }
 
 /**
+ * Q — ripple-trims the clip's head to timeline frame `frame` and closes the
+ * gap behind it: the head moves and the clip, with every sibling at or after
+ * the old head, shifts earlier by the same amount, so the removed head leaves
+ * no hole and nothing downstream drifts. Returns the shift applied; a frame
+ * at or before the old head trims nothing. Unlike `rippleTrimIn`, which
+ * pushes what follows later, this is the cut that keeps the timeline tight.
+ */
+export function rippleTrimPreviousToPlayhead(world: World, entity: Entity, frame: number): number {
+	const parent = getParentEntity(entity);
+	const oldStart = clipSpan(entity).start;
+	const oldEnd = clipSpan(entity).end;
+	if (!(oldStart < frame && frame < oldEnd)) return 0;
+	const delta = frame - oldStart;
+	const history = getEditHistory(world);
+	history.beginGesture();
+	try {
+		// Snapshot who closes up before the trim moves anything: Computed
+		// is system-derived and still holds the old timing in this call,
+		// so every landing is computed from these starts, never re-read.
+		// The clip itself returns to its old head; every sibling at or
+		// after it shifts earlier by the removed head.
+		const closing = parent
+			? siblingsInTime(parent).filter((sibling) => clipSpan(sibling).start >= oldStart)
+			: [entity];
+		const starts = closing.map((sibling) => clipSpan(sibling).start);
+		trimIn(world, entity, frame);
+		closing.forEach((sibling, index) => {
+			moveEntityTo(world, sibling, (starts[index] ?? oldStart) - delta);
+		});
+		return delta;
+	} finally {
+		history.endGesture();
+	}
+}
+
+/**
  * Rolls the edit point at the end of `left` to timeline frame `frame`:
  * the left clip's out and the abutting right clip's in move together, so
  * their combined duration does not change. Returns the pair and the point

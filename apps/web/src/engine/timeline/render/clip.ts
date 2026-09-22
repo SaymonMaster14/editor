@@ -2,9 +2,11 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-import { Caption, CaptionType, Chars, ClipDragOrigin, Computed, Hidden, Name, Selected, TrimDragOrigin, fitsChildren, getGeneratingColor, getSourceFailure, isCaption, isGenerating, isGroup, isText, store } from '@diffusionstudio/runtime';
+import { Caption, CaptionType, Chars, ClipDragOrigin, Computed, Hidden, Name, Selected, Tool, ToolType, TrimDragOrigin, fitsChildren, getGeneratingColor, getSourceFailure, isCaption, isGenerating, isGroup, isText, store } from '@diffusionstudio/runtime';
 
 import { getDocumentEditor } from '../../editor';
+import { splitClipAtFrame } from '../../split';
+import { assert } from '@/utils';
 import {
 	CLIP_BREAKPOINTS,
 	CLIP_CORNER_RADIUS,
@@ -17,7 +19,7 @@ import {
 import { applyClipDrag, applyTrim, beginClipDrag, beginTrim } from '../drag';
 import { getClipAsset, getClipFallbackName, getClipStyle } from '../style';
 import { truncateText } from '../text';
-import { framesToPixels, getResolution, getViewport } from '../view';
+import { framesToPixels, getResolution, getScrollX, getViewport, pixelsToFrames } from '../view';
 import { renderCaption } from './caption';
 import { renderGroup } from './group';
 import { renderStillThumbnails, renderVideoThumbnails } from './thumbnails';
@@ -59,7 +61,7 @@ export function renderClip(
 	const error = getSourceFailure(entity);
 	const style = getClipStyle(entity, asset, !!error?.length);
 
-	handleBody(world, surface, entity, left, width, row, resolution);
+	handleBody(world, surface, scene, entity, left, width, row, resolution);
 
 	// A drag that has just moved the clip has moved where it is drawn, so the
 	// left edge is read again; the width does not change with it.
@@ -231,6 +233,7 @@ function renderContent(
 function handleBody(
 	world: World,
 	surface: TimelineSurfaceState,
+	scene: Entity,
 	entity: Entity,
 	left: number,
 	width: number,
@@ -239,9 +242,19 @@ function handleBody(
 ): void {
 	const pointer = surface.pointer!;
 	const editor = getDocumentEditor(world);
-
 	const { clicked, dragging, intersectsMarquee } = pointer.region(left, 0, width, row.height);
 	const selected = entity.has(Selected);
+	// The razor only cuts: a press that travels must not start a move, and a
+	// marquee must not start from a blade gesture. A click at the very edge
+	// selects instead of cutting nothing.
+	if (world.get(Tool)?.value === ToolType.BLADE) {
+		if (clicked) {
+			assert(pointer.position, 'Pointer position must be set');
+			const frame = pixelsToFrames(pointer.position.currentX + getScrollX(world, scene) * resolution, resolution);
+			if (splitClipAtFrame(world, entity, frame) === null) editor.select(entity);
+		}
+		return;
+	}
 
 	// A press that travels starts a move. The press selected the clip first,
 	// so a drag of an unselected clip moves that one and a drag of a selected
