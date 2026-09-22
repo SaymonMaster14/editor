@@ -17,6 +17,7 @@
     "webcodecs"
   ],
   "dependencies": {
+    "@diffusionstudio/audio": "*",
     "@diffusionstudio/runtime": "*",
     "koota": "^0.6.6",
     "mediabunny": "^1.32.2"

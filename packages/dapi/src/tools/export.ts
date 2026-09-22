@@ -4,6 +4,7 @@
 
 import { z } from "zod";
 import { defineTool } from "../tool";
+import { LoudnessMeasurement } from "../audio";
 import { SceneId } from "../schemas";
 
 export const ExportFormat = z.enum(["mp4", "webm", "ogg", "mov"]);
@@ -29,6 +30,7 @@ export const ExportSettings = z.object({
       codec: z.string().optional(),
       sampleRate: z.number().optional(),
       bitrate: z.number().optional(),
+      masterGainDb: z.number().optional(),
     })
     .optional(),
 });
@@ -37,7 +39,7 @@ export const exportScene = defineTool({
   name: "export",
   title: "Export scene",
   description:
-    "Encode a scene to a video file — the same render the app's export runs, covering the scene's workarea. Settings come from the scene's `diffusion.export.<id>` entry in the project's package.json (the entry the app's export panel writes); a scene without one exports with the defaults (1080p H.264 MP4, AAC audio). The output path's extension picks the container, overriding the configured format; a codec the container cannot hold is swapped for the container's own (Opus for WebM and Ogg audio, VP9 for WebM video). Returns the written path and the settings used. One export runs at a time; progress shows in the app. Only export when asked to: capture is the tool for checking a composition.",
+    "Encode a scene to a video file — the same render the app's export runs, covering the scene's workarea. Settings come from the scene's `diffusion.export.<id>` entry in the project's package.json (the entry the app's export panel writes); a scene without one exports with the defaults (1080p H.264 MP4, AAC audio). The output path's extension picks the container, overriding the configured format; a codec the container cannot hold is swapped for the container's own (Opus for WebM and Ogg audio, VP9 for WebM video). Returns the written path, the settings used, and — when audio is enabled — the rendered mix's measured loudness (integrated LUFS, true peak). One export runs at a time; progress shows in the app. Only export when asked to: capture is the tool for checking a composition.",
   input: z.object({
     id: SceneId,
     path: z
@@ -46,6 +48,9 @@ export const exportScene = defineTool({
       .describe(
         "absolute output file path, ffmpeg-style; its extension picks the container (default: exports/<id>.<format> in the project folder)",
       ),
+    settings: ExportSettings.optional().describe(
+      "per-export setting overrides, merged over the scene's package.json entry (which they do not rewrite) — e.g. { audio: { masterGainDb: -2.5 } } to land a loudness target without touching the project",
+    ),
   }),
   output: z.object({
     path: z.string(),
@@ -55,6 +60,9 @@ export const exportScene = defineTool({
     size: z.number().describe("bytes"),
     config: ExportSettings.describe(
       "the settings the export was made with — the package.json entry (or the defaults), with the container the extension resolved to",
+    ),
+    audio: LoudnessMeasurement.optional().describe(
+      "measured loudness of the rendered mix (the pre-encode PCM); absent when audio was disabled",
     ),
   }),
   environment: "renderer",

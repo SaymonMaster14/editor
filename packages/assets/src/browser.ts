@@ -11,6 +11,18 @@ import { assetName } from './types';
 import type { AssetLibrary, ImportResult } from './library';
 import type { Asset } from './types';
 
+// The one File System Access picker this module calls, typed where it is
+// used: consumers typecheck these sources under tsconfigs whose `types`
+// list does not include the ambient WICG file-system types.
+declare global {
+	interface Window {
+		showSaveFilePicker(options?: {
+			suggestedName?: string;
+			types?: { description?: string; accept: Record<string, string[]> }[];
+		}): Promise<FileSystemFileHandle>;
+	}
+}
+
 /** Opens the file picker; resolves to what was picked ([] on cancel). */
 export function pickFiles(options: { multiple?: boolean; accept?: string } = {}): Promise<File[]> {
 	return new Promise((resolve) => {

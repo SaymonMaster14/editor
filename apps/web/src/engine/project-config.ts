@@ -49,6 +49,7 @@ export type ExportAudioSettings = {
 	codec?: AudioCodec;
 	sampleRate?: number;
 	bitrate?: number;
+	masterGainDb?: number;
 };
 
 /**
@@ -114,6 +115,7 @@ export function parseExportConfig(value: unknown): ExportConfig | undefined {
 			codec: string(value.audio.codec) as ExportAudioSettings['codec'],
 			sampleRate: number(value.audio.sampleRate),
 			bitrate: number(value.audio.bitrate),
+			masterGainDb: number(value.audio.masterGainDb),
 		});
 	}
 

@@ -11,13 +11,18 @@ import {
 	Computed, Cache, Animation, KeyframeTrack, Keyframe, Chars,
 	UniformScale, Position, Offset, Rotation, Scale, Skew, Size, Opacity,
 	Color, Blur, Volume, Effect, StrokeStyle, CornerRadius, MixedCornerRadius,
-	ColorStop,
+	ColorStop, Fade, Pan, MixBus, AudioRange, Playback, FrameRate,
+	DuckPlanHandle,
 } from '../traits';
 import { AnimationType, AnimationPhase } from '../constants';
 import { revealChars, revealWords, scrambleChars } from '../utils/text-motion';
-import { getLocalWindow } from '../utils/time';
+import { getAudioWindow, getLocalWindow, isAudioAudible } from '../utils/time';
+import { getParentNode } from '../queries/hierarchy';
+import { fadeGainDbAt } from '@diffusionstudio/audio';
+import { sampleDuckCurve } from '../media/ducking-plan';
 
 import type { Entity, Trait, TraitRecord, World } from 'koota';
+import type { DuckPlan } from '../media/ducking-plan';
 
 /**
  * Reset an entity's Computed values back to its authored trait values.
@@ -48,6 +53,10 @@ export function resetAnimatedValues(world: World, entity: Entity | null, ignore?
 	computed.color[eid] = read(Color, 'value', 0);
 	computed.blur[eid] = read(Blur, 'value', 0);
 	computed.volume[eid] = read(Volume, 'value', 0);
+	computed.pan[eid] = read(Pan, 'value', 0);
+	// Ducking is timeline automation, not an authored value: the audio pass
+	// below recomputes it every frame, so reset is always silence-free 0.
+	computed.duckDb[eid] = 0;
 	computed.strokeWidth[eid] = read(StrokeStyle, 'width', 1);
 	computed.cornerRadius[eid] = read(CornerRadius, 'value', 0);
 	computed.cornerRadiusTopLeft[eid] = read(MixedCornerRadius, 'topLeft', 0);
@@ -199,11 +208,20 @@ export function motionSystem(world: World): void {
 	)) {
 		const eid = entity.id();
 
-		if (computed.visibility[eid] === 0) continue;
+		// Clips carrying audio traits get the audio pass even without
+		// animations or keyframes, and stay in it while audible rather than
+		// while visible — a J/L-cut's audio reaches past its picture.
+		const audioDriven = entity.has(Fade) || entity.has(Pan)
+			|| entity.has(MixBus) || entity.has(AudioRange);
+		const scenePosition = audioDriven ? getScenePosition(entity) : null;
+		const present = audioDriven
+			? scenePosition !== null && isAudioAudible(entity, scenePosition.frame)
+			: computed.visibility[eid] !== 0;
+		if (!present) continue;
 
 		const animations = cache.animations[eid] ?? [];
 		const keyframeTracks = cache.keyframeTracks[eid] ?? [];
-		if (animations.length === 0 && keyframeTracks.length === 0) continue;
+		if (!audioDriven && animations.length === 0 && keyframeTracks.length === 0) continue;
 
 		resetAnimatedValues(world, entity);
 
@@ -248,7 +266,45 @@ export function motionSystem(world: World): void {
 		if (uniformScale) {
 			computed.scaleY[eid] = computed.scaleX[eid];
 		}
+
+		// 3: Clip audio — fades on top of everything volume, then ducking.
+		// Fades anchor to the audible window (what you hear), so a J/L-cut
+		// fades across its reach rather than its picture.
+		if (audioDriven && scenePosition !== null) {
+			const fps = world.get(FrameRate)?.value ?? 30;
+			const window = getAudioWindow(entity);
+			const fade = entity.get(Fade);
+			const duration = (window.end - window.start) / fps;
+			computed.volume[eid] = (computed.volume[eid] ?? 0) + fadeGainDbAt(
+				(scenePosition.frame - window.start) / fps,
+				{ in: fade?.in ?? 0, out: fade?.out ?? 0, duration },
+			);
+
+			const bus = entity.get(MixBus)?.value ?? 'master';
+			const plan = scenePosition.plan;
+			computed.duckDb[eid] = plan !== null && plan.duckBuses.includes(bus)
+				? sampleDuckCurve(plan, scenePosition.frame / fps)
+				: 0;
+		}
 	}
+}
+
+/**
+ * An audio clip's position in its scene's timeline: the scene-domain frame
+ * (local time unwound through every ancestor's origin and rate) plus the
+ * scene's duck plan, if it has one. Null when no Playback ancestor owns
+ * the clip — then the clip sits out the audio pass.
+ */
+function getScenePosition(entity: Entity): { frame: number; plan: DuckPlan | null } | null {
+	let frame = entity.get(Computed)?.localTime ?? 0;
+	let current: Entity | null = entity;
+	while (current !== null && !current.has(Playback)) {
+		const computed = current.get(Computed);
+		frame = (computed?.origin ?? 0) + frame / (computed?.playbackRate || 1);
+		current = getParentNode(current);
+	}
+	if (current === null) return null;
+	return { frame: Math.round(frame), plan: current.get(DuckPlanHandle) ?? null };
 }
 
 /**
@@ -321,6 +377,10 @@ export function getPropertyPaths(world: World) {
 		'volume': {
 			computed: computed.volume,
 			authored: store(world, Volume).value,
+		},
+		'pan': {
+			computed: computed.pan,
+			authored: store(world, Pan).value,
 		},
 		'effect.value': {
 			computed: computed.value,

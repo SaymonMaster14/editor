@@ -4,7 +4,7 @@
 
 import { CONONICAL_TIME_BASE, PaintType } from '../constants';
 import {
-	Audio, AssetId, Cache, Computed, Geometry, Paint, Trim, Library, FrameRate,
+	Audio, AssetId, AudioRange, Cache, Computed, Geometry, Paint, Trim, Library, FrameRate,
 	Delay, IsMask, PlaybackRate, SourceFrameRate,
 } from '../traits';
 import { getParentNode } from '../queries/hierarchy';
@@ -102,6 +102,30 @@ export function getSourceWindow(entity: Entity): { in: number; out: number } {
  * anchored to a node's head or tail in local time — preset animation windows —
  * must use this, not the source window.
  */
+/**
+ * The timeline-frame window the node's audio is audible in: its AudioRange
+ * where one is authored (a J/L-cut), otherwise its video span. A range side
+ * of -1 follows the video edge on that side. Fades anchor to this window
+ * and the playback system schedules decoders against it, so audio reaches
+ * past the picture exactly where the range says it does.
+ */
+export function getAudioWindow(entity: Entity): { start: number; end: number } {
+	const computed = entity.get(Computed);
+	const range = entity.get(AudioRange);
+	const start = range?.start ?? -1;
+	const end = range?.end ?? -1;
+	return {
+		start: start < 0 ? (computed?.start ?? 0) : start,
+		end: end < 0 ? (computed?.end ?? 0) : end,
+	};
+}
+
+/** Whether `entity`'s audio plays at timeline frame `frame`. */
+export function isAudioAudible(entity: Entity, frame: number): boolean {
+	const window = getAudioWindow(entity);
+	return frame >= window.start && frame < window.end;
+}
+
 export function getLocalWindow(entity: Entity): { in: number; out: number } {
 	const computed = entity.get(Computed);
 	const origin = computed?.origin ?? 0;

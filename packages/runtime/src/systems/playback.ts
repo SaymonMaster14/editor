@@ -13,7 +13,7 @@ import { store } from '../world/store';
 import { PaintType } from '../constants';
 import {
 	ChildOf, Hidden, Culled, Dragging,
-	Geometry, Group, AdjustmentLayer, Paint, Audio, Caption, Muted, Soloed,
+	Geometry, Group, AdjustmentLayer, Paint, Audio, AudioRange, Caption, Muted, Soloed,
 	Sequential, Transition, Playback, Workarea,
 	AudioPlayback, Computed,
 	AudioDecoderHandle, AudioBusHandle, Host,
@@ -21,7 +21,8 @@ import {
 	Root,
 } from '../traits';
 import { getParentNode } from '../queries/hierarchy';
-import { getIntrinsicPaint, getSourceWindow } from '../utils/time';
+import { getAudioWindow, getIntrinsicPaint, getSourceWindow } from '../utils/time';
+import { refreshDucking } from '../media/ducking-plan';
 import { clamp } from '../math/common';
 import { getTransitionWindow } from '../utils/transition';
 import {
@@ -183,14 +184,33 @@ function forwardAudioDecoder(world: World, scene: Entity, entity: Entity, audioS
 	const audioDelay = audioOffset - playbackOffset;
 	const bus = resolveAudioBus(world, entity);
 
+	// A J/L-cut schedules its audio window rather than its video span: the
+	// gate, the trim, and the source position all follow the AudioRange, so
+	// audio reaches under the neighboring clips. Without a range this is
+	// exactly the old path — visibility gate, source-window trim.
+	const hasRange = entity.has(AudioRange);
+	const audioWindow = hasRange ? getAudioWindow(entity) : null;
+	const audible = audioWindow !== null
+		? currentTime >= audioWindow.start && currentTime < audioWindow.end
+		: computed.visibility[eid] === 1;
+	const trimStart = audioWindow !== null
+		? ((audioWindow.start - origin) * playbackRate) / fps
+		: source.in / fps;
+	const trimEnd = audioWindow !== null
+		? ((audioWindow.end - origin) * playbackRate) / fps
+		: source.out / fps;
+
 	if (!decoder.ready) {
 		framePromises(world)?.push(initPromise);
-	} else if (computed.visibility[eid] === 1 && playback.playing[sid] === true && (playback.speed[sid] || 1) === 1) {
+	} else if (audible && playback.playing[sid] === true && (playback.speed[sid] || 1) === 1) {
 		const playPromise = decoder.playTo(bus, {
-			relativeFrom: localFrame / fps,
+			// A J-cut's head sits before source zero; the sink decodes from
+			// zero and the negative trim start lands it late — silence, then
+			// sound, at the right context times.
+			relativeFrom: Math.max(0, localFrame / fps),
 			relativeTo: (localFrame + 15) / fps,
-			trimStart: source.in / fps,
-			trimEnd: source.out / fps,
+			trimStart,
+			trimEnd,
 			playbackRate,
 			currentTime: currentTime / fps,
 			relativeDelay: (origin / fps) + audioDelay,
@@ -365,6 +385,26 @@ export function resolveAudioBus(world: World, entity: Entity): AudioBus | null {
 	return entity.get(AudioBusHandle) ?? null;
 }
 
+/**
+ * The offline render time (seconds) the current tick's automation belongs
+ * to: the scene playhead minus the audio anchor the encoder pinned, so 0
+ * is the first rendered sample however the workarea sits. Undefined when
+ * no Playback ancestor owns the entity — then the bus writes live.
+ */
+function automationWhen(world: World, entity: Entity): number | undefined {
+	const computed = store(world, Computed);
+	const audioPlayback = store(world, AudioPlayback);
+	let current: Entity | null = entity;
+	while (current) {
+		if (current.has(Playback)) {
+			const sid = current.id();
+			return (computed.localTimeInSeconds[sid] ?? 0) - (audioPlayback.timelineOffsetInSeconds[sid] ?? 0);
+		}
+		current = getParentNode(current);
+	}
+	return undefined;
+}
+
 function getGlobalFrame(world: World, entity: Entity): number {
 	const computed = store(world, Computed);
 
@@ -385,6 +425,9 @@ export function playbackSystem(world: World): void {
 	// handle root playback
 	for (const entity of world.query(Playback)) {
 		advancePlayhead(world, entity);
+		// Keeps the scene's duck plan current (a no-op without a setup, a
+		// signature compare when idle, a background replan on change).
+		refreshDucking(world, entity);
 	}
 
 	for (const entity of world.query(Or(Geometry, Group, AdjustmentLayer), ChildOf(world.get(Root)!))) {
@@ -417,7 +460,7 @@ export function playbackSystem(world: World): void {
 	// Sync audio buses
 	let soloed: Set<Entity> | null = null;
 	for (const entity of world.query(AudioBusHandle)) {
-		entity.get(AudioBusHandle)?.sync();
+		entity.get(AudioBusHandle)?.sync(automationWhen(world, entity));
 		if (!entity.has(Soloed)) continue;
 
 		if (soloed === null) {
@@ -432,7 +475,7 @@ export function playbackSystem(world: World): void {
 	if (soloed) {
 		for (const entity of world.query(AudioBusHandle)) {
 			if (!soloed.has(entity)) {
-				entity.get(AudioBusHandle)?.mute();
+				entity.get(AudioBusHandle)?.mute(automationWhen(world, entity));
 			}
 		}
 	}

@@ -16,6 +16,7 @@
     "@diffusionstudio/agent-chat": "*",
     "@diffusionstudio/api-contract": "^0.1.0",
     "@diffusionstudio/assets": "*",
+    "@diffusionstudio/audio": "*",
     "@diffusionstudio/dapi": "*",
     "@diffusionstudio/encoder": "*",
     "@diffusionstudio/jsx": "*",

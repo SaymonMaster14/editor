@@ -3,7 +3,7 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 
-import { Active, AdjustmentLayer, Animation, AnimationPhase, AnimationType, appendChild, AssetId, Audio, Background, bindAsset, BlendMode, BlendModeType, Blur, Caption, CaptionAlign, CAPTION_PRESET_FILLS, CAPTION_PRESET_STYLES, CaptionType, Chars, ClipHeight, ClipsContent, Computed, Constraint, ConstraintCache, ConstraintType, CornerRadius, createEntity, DEFAULT_BACKGROUND, Color, ColorStop, Delay, Effect, EffectType, Expanded, FontStyle, FramePromises, FrameRate, Generating, GenerationRequest, getActiveEntity, Loop, LoadRequest, Geometry, GeometryType, getEntityTree, getParentEntity, getParentNode, Hidden, Host, IsMask, isText, ItemIndex, KeepAspectRatio, Keyframe, KeyframeTrack, MixedCornerRadius, Mode, Muted, Name, Offset, Opacity, Paint, PaintType, parseColor, PendingSource, PendingSync, Playback, PlaybackRate, Position, removeChild, RenderSurface, resizeEntity, Scale, ScaleMode, ScaleModeType, secondsToFrames, getAsset, getEntityChildren, Group, Sequential, Shader, Size, Stage, Root, Rotation, Scene, Selected, Shadow, Source, SourceFrameRate, setCameraMatrix, setPlayhead, setTimelineView, Stroke, StrokeCap, StrokeJoin, StrokeStyle, SyncRequest, TextAlign, TextBaseline, TextCase, TextRange, TextStyle, TranscriptionRequest, Transition, TransitionType, Trim, UniformScale, Volume, Workarea } from '@diffusionstudio/runtime';
+import { Active, AdjustmentLayer, Animation, AnimationPhase, AnimationType, appendChild, AssetId, Audio, AudioRange, Background, bindAsset, BlendMode, BlendModeType, Blur, Caption, CaptionAlign, CAPTION_PRESET_FILLS, CAPTION_PRESET_STYLES, CaptionType, Chars, ClipHeight, ClipsContent, Computed, Constraint, ConstraintCache, ConstraintType, CornerRadius, createEntity, DEFAULT_BACKGROUND, Color, ColorStop, Delay, Ducking, DuckingConfig, Effect, EffectType, Expanded, Fade, FontStyle, FramePromises, FrameRate, Generating, GenerationRequest, getActiveEntity, Loop, LoadRequest, Geometry, GeometryType, getEntityTree, getParentEntity, getParentNode, Hidden, Host, IsMask, isText, ItemIndex, KeepAspectRatio, Keyframe, KeyframeTrack, MixBus, MixedCornerRadius, Mode, Muted, Name, Offset, Opacity, Paint, Pan, PaintType, parseColor, PendingSource, PendingSync, Playback, PlaybackRate, Position, removeChild, RenderSurface, resizeEntity, Scale, ScaleMode, ScaleModeType, secondsToFrames, getAsset, getEntityChildren, Group, Sequential, Shader, Size, Stage, Root, Rotation, Scene, Selected, Shadow, Source, SourceFrameRate, setCameraMatrix, setPlayhead, setTimelineView, Stroke, StrokeCap, StrokeJoin, StrokeStyle, SyncRequest, TextAlign, TextBaseline, TextCase, TextRange, TextStyle, TranscriptionRequest, Transition, TransitionType, Trim, UniformScale, Volume, Workarea } from '@diffusionstudio/runtime';
 import { LOOP_ATTR, parseTime, SOURCE_ATTR } from '@diffusionstudio/jsx';
 import { createSignal } from 'solid-js';
 import { SVGElements } from 'solid-js/web';
@@ -193,6 +193,7 @@ const TRACK_PROPERTIES: Record<string, PropertyPath> = {
 	cornerRadiusBottomRight: 'mixedVertexRadius.bottomRight',
 	cornerRadiusBottomLeft: 'mixedVertexRadius.bottomLeft',
 	volume: 'volume',
+	pan: 'pan',
 	color: 'color',
 	offset: 'stop.offset',
 	blur: 'blur',
@@ -1229,6 +1230,81 @@ export class RuntimeDocument implements ProjectDocument<SceneNode> {
 				}
 				return;
 			}
+			case 'fadeIn':
+			case 'fadeOut': {
+				const side = name === 'fadeIn' ? 'in' : 'out';
+				const current = entity.get(Fade) ?? { in: 0, out: 0 };
+				const seconds = Math.max(0, toNumber(value) ?? 0);
+				if (seconds === 0 && current[side === 'in' ? 'out' : 'in'] === 0) {
+					entity.remove(Fade);
+					return;
+				}
+
+				entity.add(Fade);
+				entity.set(Fade, { ...current, [side]: seconds });
+				return;
+			}
+			case 'pan': {
+				const position = toNumber(value);
+				if (position === undefined) {
+					entity.remove(Pan);
+					return;
+				}
+
+				entity.add(Pan);
+				entity.set(Pan, { value: Math.max(-1, Math.min(1, position)) });
+				return;
+			}
+			case 'bus': {
+				if (typeof value !== 'string' || value === '' || value === 'master') {
+					entity.remove(MixBus);
+					return;
+				}
+
+				entity.add(MixBus);
+				entity.set(MixBus, { value });
+				return;
+			}
+			case 'audioStart':
+			case 'audioEnd': {
+				this.syncAudioRange(node);
+				return;
+			}
+			case 'ducking': {
+				if (value === undefined || value === null || typeof value !== 'object') {
+					entity.remove(Ducking);
+					return;
+				}
+
+				const spec = value as {
+					keyBus?: unknown; duckBuses?: unknown; thresholdDb?: unknown;
+					depthDb?: unknown; attackMs?: unknown; holdMs?: unknown;
+					releaseMs?: unknown;
+				};
+				const config = new DuckingConfig();
+				if (typeof spec.keyBus === 'string' && spec.keyBus !== '') {
+					config.keyBus = spec.keyBus;
+				}
+				if (Array.isArray(spec.duckBuses)) {
+					config.duckBuses = spec.duckBuses.filter(
+						(bus): bus is string => typeof bus === 'string' && bus !== '',
+					);
+				}
+				const thresholdDb = toNumber(spec.thresholdDb);
+				if (thresholdDb !== undefined) config.thresholdDb = thresholdDb;
+				const depthDb = toNumber(spec.depthDb);
+				if (depthDb !== undefined) config.depthDb = Math.min(0, depthDb);
+				const attackMs = toNumber(spec.attackMs);
+				if (attackMs !== undefined) config.attackMs = Math.max(0, attackMs);
+				const holdMs = toNumber(spec.holdMs);
+				if (holdMs !== undefined) config.holdMs = Math.max(0, holdMs);
+				const releaseMs = toNumber(spec.releaseMs);
+				if (releaseMs !== undefined) config.releaseMs = Math.max(0, releaseMs);
+
+				entity.add(Ducking);
+				entity.set(Ducking, config);
+				return;
+			}
 			case 'syncTo': {
 				entity.remove(PendingSync);
 
@@ -1470,6 +1546,29 @@ export class RuntimeDocument implements ProjectDocument<SceneNode> {
 			entity.add(Trim);
 			entity.set(Trim, { start: sourceInFrames, end: out });
 		}
+	}
+
+	/**
+	 * Reconciles `audioStart`/`audioEnd` (scene-absolute timeline times — a
+	 * J/L-cut reaches under its timeline neighbors) into the AudioRange
+	 * trait. An unset side is -1, "follow the video edge", which the runtime
+	 * resolves against the clip's own span; both unset removes the trait.
+	 */
+	private syncAudioRange(node: SceneNode): void {
+		const { entity, props } = node;
+
+		const start = toSeconds(props.audioStart);
+		const end = toSeconds(props.audioEnd);
+		if (start === undefined && end === undefined) {
+			entity.remove(AudioRange);
+			return;
+		}
+
+		entity.add(AudioRange);
+		entity.set(AudioRange, {
+			start: start === undefined ? -1 : this.toFrames(start),
+			end: end === undefined ? -1 : this.toFrames(end),
+		});
 	}
 
 	/**

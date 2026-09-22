@@ -152,6 +152,16 @@ media
   .action((ref: string) => run("media_probe", { path: assetPath(ref) }));
 
 media
+  .command("loudness")
+  .alias("lufs")
+  .description(describe("audio_loudness"))
+  .argument("<path>", field("audio_loudness", "path"))
+  .option("-t, --target <lufs>", field("audio_loudness", "targetLUFS"), numeric)
+  .action((ref: string, opts: Omit<ToolInput<"audio_loudness">, "path">) =>
+    run("audio_loudness", { path: assetPath(ref), ...opts }),
+  );
+
+media
   .command("transcribe")
   .description(describe("media_transcribe"))
   .argument("<path>", field("media_transcribe", "path"))

@@ -25,6 +25,8 @@ export const Computed = trait({
 	color: 0,
 	blur: 0,
 	volume: 0,
+	pan: 0,
+	duckDb: 0,
 	value: 0,
 	strokeWidth: 0,
 	cornerRadius: 0,

@@ -6,7 +6,7 @@ import { canEncodeVideo } from "mediabunny";
 import { computeOutputSize } from "@diffusionstudio/encoder";
 import { Computed, FrameRate, Workarea } from "@diffusionstudio/runtime";
 import { isAbsoluteSource } from "@diffusionstudio/assets";
-import { DapiError } from "@diffusionstudio/dapi";
+import { DapiError, finiteDb } from "@diffusionstudio/dapi";
 
 import { renderOverlay, renderScene } from "@/context/render";
 import { ElectronWritableFileHandle } from "@/lib/electron-file-writable";
@@ -18,6 +18,7 @@ import { MAIN_CHANNELS } from "@desktop/main-channels";
 import { requireScene } from "../lib/scene";
 
 import type { AudioCodec, OutputFormat, VideoCodec } from "mediabunny";
+import type { ExportAudioMeasurement } from "@diffusionstudio/encoder";
 import type { ExportSettings } from "@diffusionstudio/dapi";
 import type { ContainerFormat, ExportConfig } from "@/engine/project-config";
 import type { ToolHandler } from "../handler";
@@ -91,7 +92,7 @@ async function reconcileCodecs(settings: ExportConfig, format: ContainerFormat):
   };
 }
 
-export const exportScene: ToolHandler<"export"> = async ({ id, path }, ctx) => {
+export const exportScene: ToolHandler<"export"> = async ({ id, path, settings: overrides }, ctx) => {
   const { world, project, engine } = ctx.requireSession();
   const scene = requireScene(world, id, "export");
 
@@ -99,9 +100,15 @@ export const exportScene: ToolHandler<"export"> = async ({ id, path }, ctx) => {
   // — the same one the app's export panel writes — so a tool export
   // reproduces the in-app one; a scene without an entry uses the default
   // template, the way ⌘E does. `template` is only the preset's label.
+  // Per-export `settings` ride over the entry, which they do not rewrite.
   const base = world.get(ProjectConfigTrait)?.exportOf(scene) ?? getDefaultExportTemplate();
-  const format = resolveFormat(path, { format: base.format, video: base.video, audio: base.audio });
-  const settings = await reconcileCodecs({ format, video: base.video, audio: base.audio }, format);
+  const entry: ExportConfig = {
+    format: overrides?.format ?? base.format,
+    video: { ...base.video, ...overrides?.video } as ExportConfig["video"],
+    audio: { ...base.audio, ...overrides?.audio } as ExportConfig["audio"],
+  };
+  const format = resolveFormat(path, { format: entry.format, video: entry.video, audio: entry.audio });
+  const settings = await reconcileCodecs({ format, video: entry.video, audio: entry.audio }, format);
   const key = sceneConfigKey(scene) ?? id;
   const target = path ?? `${project.dir()}/exports/${key.replace(/[^\w.-]+/g, "-")}.${format}`;
 
@@ -139,6 +146,7 @@ export const exportScene: ToolHandler<"export"> = async ({ id, path }, ctx) => {
   }
 
   const handle = new ElectronWritableFileHandle(target);
+  let audio: ExportAudioMeasurement | undefined;
   try {
     const result = await renderScene(engine, {
       scene,
@@ -154,6 +162,7 @@ export const exportScene: ToolHandler<"export"> = async ({ id, path }, ctx) => {
     if (result.type === "error") {
       throw result.error;
     }
+    audio = result.audio;
   } catch (error) {
     // Close the fd and drop the partial file; a failed export leaves nothing.
     await handle.dispose().catch(() => { });
@@ -170,5 +179,16 @@ export const exportScene: ToolHandler<"export"> = async ({ id, path }, ctx) => {
     duration,
     size: stat?.size ?? 0,
     config,
+    ...(audio
+      ? {
+        audio: {
+          integratedLUFS: finiteDb(audio.integratedLUFS),
+          loudnessRangeLU: audio.loudnessRangeLU,
+          truePeakDbTP: finiteDb(audio.truePeakDbTP),
+          samplePeakDbFS: finiteDb(audio.samplePeakDbFS),
+          seconds: audio.seconds,
+        },
+      }
+      : {}),
   };
 };

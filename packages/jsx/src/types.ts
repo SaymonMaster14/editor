@@ -114,6 +114,7 @@ export type AnimatableProperty =
   | "cornerRadiusBottomRight"
   | "cornerRadiusBottomLeft"
   | "volume"
+  | "pan"
   | "color"
   | "offset"
   | "blur"
@@ -350,6 +351,46 @@ type AudioTrackProps = {
    * recordings coincide on the timeline. Mutually exclusive with `start`.
    */
   syncTo?: string;
+  /** Head fade length in seconds (linear ramp from silence). Default 0. */
+  fadeIn?: number;
+  /** Tail fade length in seconds (linear ramp into silence). Default 0. */
+  fadeOut?: number;
+  /** Stereo position, -1 (hard left) to +1 (hard right), equal-power. Default 0 (center). Keyframeable. */
+  pan?: number;
+  /**
+   * Logical mix bus, e.g. "dialogue", "music", "sfx" — the group ducking
+   * treats as one fader. Default "master", which ducks under nothing.
+   */
+  bus?: string;
+  /**
+   * Timeline time the clip's audio starts playing, any `Time` format.
+   * Earlier than `start` is a J-cut: the sound arrives before the picture.
+   * Default `start`.
+   */
+  audioStart?: Time;
+  /**
+   * Timeline time the clip's audio stops playing, any `Time` format. Later
+   * than `end` is an L-cut: the sound outlives the picture. Default `end`.
+   */
+  audioEnd?: Time;
+};
+
+/** The `<Scene ducking>` setup — analysis-driven music ducking under dialogue. */
+export type DuckingSpec = {
+  /** The bus whose level keys the duck. Default "dialogue". */
+  keyBus?: string;
+  /** Buses ducked while the key is up. Default ["music"]. */
+  duckBuses?: string[];
+  /** Key level that trips the duck, dBFS-ish (peaks-derived). Default -30. */
+  thresholdDb?: number;
+  /** Ducked depth, a negative dB value. Default -8. */
+  depthDb?: number;
+  /** Time to reach ~63% of depth after the key trips, ms. Default 10. */
+  attackMs?: number;
+  /** Hold full depth this long after the key drops before releasing, ms. Default 150. */
+  holdMs?: number;
+  /** Time to recover ~63% toward unity after the key drops, ms. Default 300. */
+  releaseMs?: number;
 };
 
 type OpacityProps = {
@@ -506,6 +547,13 @@ export type SceneProps = IdentityProps & PositionProps & Required<Pick<SizeProps
    * is read wherever the file is: what it says is what comes out of a render.
    */
   workarea?: [inPoint: Time, outPoint: Time] | null;
+  /**
+   * Dialogue-driven ducking for the scene's mix: clips on `duckBuses` ride
+   * down while the `keyBus` level sits above `thresholdDb`, following one
+   * curve the planner derives from the placed key audio — so playback and
+   * export duck identically. Absent means no ducking.
+   */
+  ducking?: DuckingSpec;
   children?: SolidJSX.Element;
 };
 

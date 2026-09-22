@@ -18,10 +18,26 @@ export type EncoderProgress = {
 	remaining: Date;
 };
 
+/** Measured loudness of an export's rendered mix (the pre-encode PCM). */
+export interface ExportAudioMeasurement {
+	/** Gated integrated loudness; -Infinity when unmeasurable. */
+	integratedLUFS: number;
+	/** 10th–95th percentile spread of 3 s short-term loudness; null when too short. */
+	loudnessRangeLU: number | null;
+	/** 4x-oversampled true peak, dBTP. */
+	truePeakDbTP: number;
+	/** Sample peak, dBFS. */
+	samplePeakDbFS: number;
+	/** Mix length, seconds. */
+	seconds: number;
+}
+
 export type ExportResult =
 	| {
 		type: 'success';
 		data: Blob | undefined;
+		/** Present when audio was rendered. */
+		audio?: ExportAudioMeasurement;
 	}
 	| {
 		type: 'canceled';

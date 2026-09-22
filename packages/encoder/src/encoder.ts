@@ -15,12 +15,14 @@ import {
 	assert, store, isScene,
 	assetSystem, playbackSystem, motionSystem, transformSystem, renderSystem,
 	AudioBus, AudioBusHandle,
-	ChildOf, Geometry, Paint, Workarea, Playback,
+	ChildOf, Ducking, Geometry, Paint, Workarea, Playback,
 	AudioPlayback, Computed,
 	Position, Offset, Rotation, Scale, Skew,
 	Time, FrameRate, RenderSurface, AudioEngine, Root,
-	FramePromises,
+	FramePromises, ensureDuckPlan,
 } from '@diffusionstudio/runtime';
+
+import { dbToAmplitude, measureLoudness } from '@diffusionstudio/audio';
 
 import { TargetBuffer } from './buffer';
 import { createOutputFormat } from './format';
@@ -28,7 +30,7 @@ import { computeOutputSize, createRenderEventDetail } from './utils';
 
 import type { Entity, World } from 'koota';
 import type { EncoderConfig } from './interfaces';
-import type { ExportResult } from './types';
+import type { ExportAudioMeasurement, ExportResult } from './types';
 
 /**
  * The scene a capture world holds. An encoder takes the world as it is —
@@ -65,6 +67,14 @@ export async function createEncoder(world: World, config: EncoderConfig) {
 	const playback = store(world, Playback);
 
 	await warmupAssets(world);
+
+	// The duck planner runs in the background during realtime playback, but
+	// an export renders faster than it plans — settle every scene's curve
+	// before frame zero so the mix is ducked deterministically from the
+	// first frame.
+	for (const ducked of world.query(Ducking)) {
+		await ensureDuckPlan(world, ducked);
+	}
 
 	const frameRate = world.get(FrameRate)?.value ?? 30;
 	const sceneWidth = computed.width[sceneId]!;
@@ -185,6 +195,11 @@ export async function createEncoder(world: World, config: EncoderConfig) {
 	const sharedBuffer = new SharedArrayBuffer(4);
 	const sharedUint32Array = new Uint32Array(sharedBuffer);
 	const mixNode = offlineAudioCtx.createGain();
+	// Export-time master trim, composing with the scene's own volume fader.
+	const masterGainDb = config.audio?.masterGainDb ?? 0;
+	mixNode.gain.value = masterGainDb === -Infinity
+		? 0
+		: Number.isFinite(masterGainDb) ? dbToAmplitude(masterGainDb) : 1;
 
 	const sinkNode = new AudioWorkletNode(offlineAudioCtx, 'sink', {
 		channelCount: numberOfChannels,
@@ -316,6 +331,8 @@ export async function createEncoder(world: World, config: EncoderConfig) {
 				`Encoded frames at ${((totalFrames * 1000) / (performance.now() - start)).toFixed(2)}FPS`
 			);
 
+			let audio: ExportAudioMeasurement | undefined;
+
 			if (audioEnabled) {
 				assert(audioRenderingCompleted !== null, 'Audio rendering was not started');
 
@@ -325,7 +342,10 @@ export async function createEncoder(world: World, config: EncoderConfig) {
 					Math.ceil(duration * sampleRate) + sampleRate - lastAudioSampleCount,
 				);
 
-				await audioRenderingCompleted;
+				// The full rendered mix, measured before the encode: integrated
+				// loudness and true peak of what was actually written.
+				const renderedMix = await audioRenderingCompleted;
+				audio = measureRenderedMix(renderedMix);
 
 				sinkNode.port.postMessage(null);
 				await allAudioReceived.promise;
@@ -340,6 +360,7 @@ export async function createEncoder(world: World, config: EncoderConfig) {
 			return {
 				type: 'success',
 				data: await buffer.close(containerFormat),
+				audio,
 			};
 		} catch (e) {
 			return {
@@ -359,6 +380,22 @@ export async function createEncoder(world: World, config: EncoderConfig) {
 	};
 }
 
+
+/** BS.1770 integrated loudness plus true peak of a rendered mix buffer. */
+function measureRenderedMix(buffer: AudioBuffer): ExportAudioMeasurement {
+	const channels: Float32Array[] = [];
+	for (let c = 0; c < buffer.numberOfChannels; c++) {
+		channels.push(buffer.getChannelData(c));
+	}
+	const result = measureLoudness(channels, buffer.sampleRate);
+	return {
+		integratedLUFS: result.integratedLUFS,
+		loudnessRangeLU: result.loudnessRangeLU,
+		truePeakDbTP: result.truePeakDbTP,
+		samplePeakDbFS: result.samplePeakDbFS,
+		seconds: result.seconds,
+	};
+}
 
 function audioWorkletCode() {
 	// eslint-disable-next-line no-undef
@@ -389,6 +426,10 @@ function audioWorkletCode() {
 			const planarBuffer = new Float32Array(output.length * output[0].length);
 			for (let channel = 0; channel < Math.min(input.length, output.length); channel++) {
 				planarBuffer.set(input[channel], channel * output[0].length);
+				// Transparent passthrough: the offline destination — the
+				// export's loudness tap — hears the mix through these
+				// outputs. Without it the tap measures silence.
+				output[channel].set(input[channel]);
 			}
 
 			this.port.postMessage(planarBuffer, [planarBuffer.buffer]);

@@ -11,6 +11,7 @@ import type { AudioDecoder } from '../media/audio';
 import type { CaptionDecoder } from '../media/caption/types';
 import type { Waveform } from '../media/audio-peaks';
 import type { AudioBus } from '../media/audio-bus';
+import type { DuckPlan } from '../media/ducking-plan';
 
 // Renderer-runtime state on mounted entities (never serialized).
 export type MountData = {
@@ -35,5 +36,24 @@ export const WaveformHandle = trait(() => null as Waveform | null);
 export const CaptionDecoderHandle = trait(() => null as CaptionDecoder | null);
 
 export const AudioBusHandle = trait(() => null as AudioBus | null);
+
+// Scene-level ducking setup (the `<Scene ducking>` prop): which logical bus
+// keys the duck, which buses duck under it, and the ballistics. A class so
+// the bus list is owned per scene rather than a shared trait default.
+export class DuckingConfig {
+	keyBus = 'dialogue';
+	duckBuses: string[] = ['music'];
+	thresholdDb = -30;
+	depthDb = -8;
+	attackMs = 10;
+	holdMs = 150;
+	releaseMs = 300;
+}
+
+export const Ducking = trait(() => null as DuckingConfig | null);
+
+// The scene's computed ducking curve (see media/ducking-plan), refreshed by
+// the planner when the key audio or the setup changes. Never serialized.
+export const DuckPlanHandle = trait(() => null as DuckPlan | null);
 
 export const Data = trait(() => null as MountData | null);

@@ -1,0 +1,26 @@
+{
+  "name": "@diffusionstudio/audio",
+  "version": "0.1.0",
+  "description": "First-class audio DSP: decibel/amplitude math, fades, pan laws, BS.1770 loudness and true-peak metering, and analysis-driven ducking curves. Pure TypeScript, no DOM, no WebAudio — the runtime and encoder schedule these; this package computes them.",
+  "license": "MPL-2.0",
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "check": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "keywords": [
+    "audio",
+    "dsp",
+    "loudness",
+    "mixing",
+    "lufs"
+  ],
+  "devDependencies": {
+    "typescript": "~5.9.3",
+    "vitest": "^4.0.0"
+  }
+}

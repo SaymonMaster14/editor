@@ -35,6 +35,14 @@ export interface AudioConfig {
 	 * @default 'aac'
 	 */
 	codec?: AudioCodec;
+
+	/**
+	 * Master trim applied to the mix at export, in decibels — composes with
+	 * the scene's own `volume` fader. What loudness normalization writes:
+	 * measure the mix, set this to (target − measured), export again.
+	 * @default 0
+	 */
+	masterGainDb?: number;
 }
 
 export interface VideoConfig {

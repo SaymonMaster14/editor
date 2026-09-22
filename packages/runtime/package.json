@@ -21,6 +21,7 @@
   ],
   "dependencies": {
     "@diffusionstudio/assets": "*",
+    "@diffusionstudio/audio": "*",
     "@diffusionstudio/jsx": "*",
     "animejs": "^4.4.1",
     "colord": "^2.9.3",

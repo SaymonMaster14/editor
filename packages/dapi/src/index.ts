@@ -19,6 +19,8 @@ export type { DapiErrorCode } from "./errors";
 
 export { MAX_FRAMES_PER_SHEET, Bytes } from "./schemas";
 
+export { LoudnessMeasurement, finiteDb } from "./audio";
+
 export { INLINE_MAX_IMAGES, INLINE_MAX_BYTES, qaDelivery, selectSweepPositions, framePixelStats, detectLayoutIssues } from "./qa";
 
 export { MCP_HOST, MCP_PORT, MCP_PATH, MCP_URL } from "./mcp";
@@ -57,6 +59,7 @@ import type { FrameQuality as FrameQualitySchema } from "./tools/media-grab";
 import type { TranscriptSegment as TranscriptSegmentSchema, TranscriptWord as TranscriptWordSchema } from "./tools/media-transcribe";
 import type { FontFamily as FontFamilySchema } from "./tools/fonts";
 import type { AssetAlternate as AssetAlternateSchema, AssetCandidate as AssetCandidateSchema, AssetDownload as AssetDownloadSchema, AssetImageRef as AssetImageRefSchema, AssetKind as AssetKindSchema, AssetLicense as AssetLicenseSchema, AssetOrientation as AssetOrientationSchema, AssetProvenance as AssetProvenanceSchema, AssetProviderOutcome as AssetProviderOutcomeSchema } from "./assets";
+import type { LoudnessMeasurement as LoudnessMeasurementSchema } from "./audio";
 import type { ToolArgs, ToolOutput, ToolResult } from "./catalog";
 
 export type LogLevel = z.output<typeof LogLevelSchema>;
@@ -91,6 +94,7 @@ export type AssetAlternate = z.output<typeof AssetAlternateSchema>;
 export type AssetCandidate = z.output<typeof AssetCandidateSchema>;
 export type AssetProviderOutcome = z.output<typeof AssetProviderOutcomeSchema>;
 export type AssetProvenance = z.output<typeof AssetProvenanceSchema>;
+export type LoudnessMeasurement = z.output<typeof LoudnessMeasurementSchema>;
 
 export type OpenRequest = ToolArgs<"open">;
 export type OpenResult = ToolResult<"open">;
@@ -123,5 +127,7 @@ export type MediaWaveformRequest = ToolArgs<"media_waveform">;
 export type MediaWaveformResult = ToolResult<"media_waveform">;
 export type MediaListenRequest = ToolArgs<"media_listen">;
 export type MediaListenResult = ToolResult<"media_listen">;
+export type AudioLoudnessRequest = ToolArgs<"audio_loudness">;
+export type AudioLoudnessResult = ToolResult<"audio_loudness">;
 export type FontsRequest = ToolArgs<"fonts">;
 export type ReportRequest = ToolArgs<"report">;

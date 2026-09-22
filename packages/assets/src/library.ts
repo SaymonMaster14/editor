@@ -371,10 +371,10 @@ export class AssetLibrary {
 
 	/** Resolves a source outside the library without adding it to the manifest. */
 	private transient(source: string): Promise<Asset> {
-		const existing = this.transientBySource(source);
-		if (existing) return Promise.resolve(existing);
-
 		return this.once(`transient:${source}`, async () => {
+			const existing = this.transientBySource(source);
+			if (existing && await this.transientFresh(existing)) return existing;
+			if (existing) this.map.delete(existing.id);
 			const asset = isUrlSource(source)
 				? await this.describeUrl(source, { path: basename(source.split(/[?#]/)[0]!) })
 				: await this.describeSource(source, { path: basename(source) });
@@ -385,6 +385,19 @@ export class AssetLibrary {
 			this.map.set(asset.id, asset);
 			return asset;
 		});
+	}
+
+	/**
+	 * Whether a cached transient still names the bytes on disk. A file the
+	 * source changed under (by size or mtime — an export's atomic rename
+	 * replaces it) is described again instead: a File materialized before
+	 * the swap can no longer be read once its backing file is replaced, so
+	 * serving the cached asset would fail the read, not the resolve.
+	 */
+	private async transientFresh(asset: Asset): Promise<boolean> {
+		if (isUrlSource(asset.source) || !asset.stat) return true;
+		const stat = await this.fs.stat(asset.source);
+		return !!stat && stat.size === asset.stat.size && stat.mtime === asset.stat.mtime;
 	}
 
 	private transientBySource(source: string): Asset | undefined {

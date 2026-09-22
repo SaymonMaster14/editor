@@ -8,6 +8,7 @@ export * from './audio-peaks';
 export * from './audio-sync';
 export * from './caption';
 export * from './dispose';
+export * from './ducking-plan';
 export * from './frame-cache';
 export * from './handoff';
 export * from './html';
