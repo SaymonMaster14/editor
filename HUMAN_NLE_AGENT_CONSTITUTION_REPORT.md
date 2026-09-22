@@ -46,7 +46,8 @@
 - Production integrity / native-first enforcement: no editability validator;
   `check` validates project state, not native-vs-flattened representation. — DONE
   (integrity milestone below; live-agent cheating observation still pending).
-- Architecture checks: no `check:architecture`, no exceptions file.
+- Architecture checks: no `check:architecture`, no exceptions file. — DONE
+  (constitution milestone below).
 
 ## Plan (milestones)
 
@@ -321,6 +322,36 @@ Commit `8ede877`, pushed to `fork/diffusion-on-steroids`.
   ghost-asset error cases. Repo-wide `npm run check` clean, handler
   lint clean.
 
+## Milestone: architecture constitution (plan §10)
+
+Commit `22785a4`, pushed to `fork/diffusion-on-steroids`.
+
+- `scripts/check-architecture.mjs` (new, dependency-free):
+  app-inversion (packages importing apps), phantom-dep (workspace
+  imports missing from package.json, subpaths resolved), workspace
+  cycles, module value-cycles within a workspace (type-only edges
+  exempt — `verbatimModuleSyntax` makes them reliable), the 1000-line
+  size gate for executable files, the part2/splitN fake-modularity
+  tripwire, and the DAPI-handler/harness boundary. Warnings
+  (non-failing, review signals): 600–1000 lines, hot complexity
+  (>150 branches on >600 lines), wide fan-out (>25 imports on
+  non-barrels). Thresholds measured from the repo (742 executable
+  files), then hardcoded — the check never grades its own curve.
+- `architecture-exceptions.json` (new): 5 reviewed size exceptions,
+  all pre-existing giants with honest reasons (reconciler document
+  model, desktop project lifecycle + source-edit applier, chat prompt
+  input, canonical DocumentEditor — verified single-domain, ~30
+  document-mutation methods, no cross-domain sprawl). Stale and
+  malformed exceptions fail the check, so the file cannot rot.
+- Wired as `npm run check:architecture` plus a CI step in
+  `windows.yml` (after lint); agent instructions carry the
+  constitution in one sentence.
+- Verification: self-test 13/13 on fixture roots (every error rule
+  fires, excuses silence, type-only cycles and declared subpaths
+  pass); repo run PASS — 0 errors, 27 warnings, 831 files, 5/5
+  exceptions applied. No new god objects: every file this goal added
+  sits under 360 lines (largest: policy.ts at 357), no cycles introduced.
+
 ## Fire tests
 
 NLE E2E (agent path over DAPI/CLI): 27/27 green, see milestone above.
@@ -342,9 +373,12 @@ tools honestly marked unenforceable, claude/opencode environmentally
 blocked (no credit / free-tier gate). Integrity fire test (§56–§57):
 the validator is proven against synthetic cheats (E2E 24/24), but no
 live agent has yet been observed against the tempting task — that
-observation, plus human→agent and monolith fire tests, still pending
-(plan §11). Evidence artifacts stay under `tmp/` (now gitignored:
-kept on disk, never committed).
+observation, plus the human→agent fire test, still pending (plan
+§11). Monolith fire test (§57): executed via the constitution check —
+new systems introduce no giant manager/component, no all-commands
+file, no cycles, no handler/harness inversion (0 errors; the 5 size
+exceptions are all pre-existing). Evidence artifacts stay under
+`tmp/` (now gitignored: kept on disk, never committed).
 
 ## Performance
 
@@ -393,6 +427,11 @@ clean; integrity E2E 24/24 ALL PASS on a fresh live stack (prior
 stack predated the tool, so it was stopped and relaunched — catalog
 bakes at boot). Earlier E2E proofs untouched by this slice and not
 re-run.
+
+Constitution-milestone gate at `22785a4`: `npm run
+check:architecture` PASS (0 errors, 27 warnings, 831 files, 5/5
+exceptions); self-test 13/13 on fixture roots; agent-chat 132/132
+(instructions sentence); CI step added to `windows.yml`.
 
 ## Limitations
 
@@ -464,10 +503,15 @@ re-run.
   `linked` role trusts absolute outside paths, which a full-machine
   agent could also write to — project-scoped agents cannot, which is
   where the two systems reinforce each other.
+- The constitution's complexity/fan-out signals are crude regex
+  heuristics, which is why they warn instead of failing; only size,
+  cycles, layer inversions, phantom deps, part-names, and the
+  handler boundary fail CI. The 5 size exceptions grandfather
+  pre-existing giants — none added by this goal.
 
 ## Final SHA
 
-Pending — goal continues. Interim HEAD: `8ede877`
-(`fork/diffusion-on-steroids`), integrity slice complete (plan §9).
-Remaining: architecture constitution (§10), remaining fire tests
-(§11), packaging (§12).
+Pending — goal continues. Interim HEAD: `22785a4`
+(`fork/diffusion-on-steroids`), constitution slice complete
+(plan §10). Remaining: human→agent + live-cheating fire tests (§11),
+packaging (§12).
