@@ -32,6 +32,7 @@ export const audioBeats = defineTool({
     path: z.string(),
     sampleRate: z.number().describe("Hz"),
     channels: z.number().describe("decoded channel count"),
+    cached: z.boolean().describe("true when the result was reused from the analysis cache without re-decoding"),
   }),
   environment: "renderer",
 });

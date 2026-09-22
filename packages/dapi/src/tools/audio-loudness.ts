@@ -25,6 +25,7 @@ export const audioLoudness = defineTool({
     channels: z.number().describe("decoded channel count"),
     targetLUFS: z.number().optional().describe("the requested target, echoed"),
     suggestedGainDb: z.number().nullable().describe("targetLUFS − integratedLUFS; null without a target or without a measurement"),
+    cached: z.boolean().describe("true when the measurement was reused from the analysis cache without re-decoding"),
   }),
   environment: "renderer",
 });

@@ -2,8 +2,11 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-export { sha256Hex, hashFileSampled, hashFileFull, stableStringify, hashParams, cacheKey, SAMPLE_BYTES } from "./hash";
-export { ArtifactStore } from "./artifact";
-export type { AnalysisArtifact, ArtifactSpec, ArtifactStoreOptions, FailureRecord } from "./artifact";
-export { ResourceScheduler, JobCancelledError, JobTimeoutError } from "./scheduler";
-export type { ResourceClass, JobProgress, JobRun, JobSpec, JobState, JobInfo, SchedulerOptions } from "./scheduler";
+// Portable entry: safe to import from browsers and Electron renderers.
+// No node builtins anywhere below. Node-only backends (disk artifacts,
+// file hashing, the resource scheduler) live under `@diffusionstudio/analysis/node`.
+
+export { SAMPLE_BYTES, cacheKeyAsync, hashBlobSampled, hashParamsAsync, sha256HexAsync, stableStringify } from "./hash-core";
+export { MemoryArtifactStore } from "./memory";
+export type { MemoryArtifact, MemoryStoreStats } from "./memory";
+export type { ArtifactSpec, FailureRecord } from "./artifact-spec";

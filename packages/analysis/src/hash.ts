@@ -11,8 +11,9 @@
 import { createHash } from "node:crypto";
 import { createReadStream, promises as fs } from "node:fs";
 
-/** Bytes hashed from each of the head, middle and tail of a large file. */
-export const SAMPLE_BYTES = 1024 * 1024;
+import { SAMPLE_BYTES, stableStringify } from "./hash-core";
+
+export { SAMPLE_BYTES, stableStringify };
 
 /** Hex of the SHA-256 of `data`. */
 export function sha256Hex(data: string | Uint8Array): string {
@@ -57,46 +58,6 @@ export function hashFileFull(path: string): Promise<string> {
     stream.on("error", reject);
     stream.on("end", () => resolve(hash.digest("hex")));
   });
-}
-
-/**
- * Deterministic JSON: object keys sorted recursively, `undefined` dropped
- * like JSON.stringify, no whitespace. Throws on circular input.
- */
-export function stableStringify(value: unknown): string {
-  const seen = new Set<object>();
-  const encode = (node: unknown): string => {
-    if (node === null) return "null";
-    switch (typeof node) {
-      case "string":
-        return JSON.stringify(node);
-      case "number":
-        return Number.isFinite(node) ? String(node) : "null";
-      case "boolean":
-        return node ? "true" : "false";
-      case "undefined":
-      case "function":
-      case "symbol":
-      case "bigint":
-        return "null";
-      case "object": {
-        if (seen.has(node)) throw new Error("stableStringify: circular value");
-        seen.add(node);
-        try {
-          if (Array.isArray(node)) return `[${node.map(encode).join(",")}]`;
-          const entries = Object.entries(node as Record<string, unknown>)
-            .filter(([, v]) => v !== undefined && typeof v !== "function" && typeof v !== "symbol")
-            .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
-          return `{${entries.map(([k, v]) => `${JSON.stringify(k)}:${encode(v)}`).join(",")}}`;
-        } finally {
-          seen.delete(node);
-        }
-      }
-      default:
-        return "null";
-    }
-  };
-  return encode(value);
 }
 
 /** The identity of an analysis parameter set. */

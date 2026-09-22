@@ -6,6 +6,7 @@ import { ALL_FORMATS, BlobSource, CanvasSink, Input } from "mediabunny";
 import { getAssetFile } from "@diffusionstudio/runtime";
 import { keyClip } from "@diffusionstudio/keyer";
 import { DapiError } from "@diffusionstudio/dapi";
+import { analyzeCached } from "../lib/analysis-cache";
 import { requireAssetType, resolveAsset } from "../lib/assets";
 
 import type { SceneFrame } from "@diffusionstudio/scene";
@@ -28,62 +29,73 @@ export const mediaKey: ToolHandler<"media_key"> = async ({ path, screen, toleran
   }
 
   const blob = await getAssetFile(asset);
-  const input = new Input({ formats: ALL_FORMATS, source: new BlobSource(blob) });
-  try {
-    const track = await input.getPrimaryVideoTrack();
-    if (!track) throw new DapiError("wrong-kind", `Asset ${asset.id} has no video track.`);
+  const { result, cached } = await analyzeCached({
+    kind: "media_key",
+    engine: "diffusion-keyer",
+    engineVersion: "1",
+    source: blob,
+    params: { screen, tolerance, softness },
+    duration: asset.duration,
+    run: async () => {
+      const input = new Input({ formats: ALL_FORMATS, source: new BlobSource(blob) });
+      try {
+        const track = await input.getPrimaryVideoTrack();
+        if (!track) throw new DapiError("wrong-kind", `Asset ${asset.id} has no video track.`);
 
-    // Track timestamps may not start at 0; offset content time by the first.
-    const firstTimestamp = (await track.getFirstTimestamp()) ?? 0;
-    const displayWidth = await track.getDisplayWidth();
-    const sink = new CanvasSink(track, displayWidth > SCAN_WIDTH ? { width: SCAN_WIDTH } : undefined);
+        // Track timestamps may not start at 0; offset content time by the first.
+        const firstTimestamp = (await track.getFirstTimestamp()) ?? 0;
+        const displayWidth = await track.getDisplayWidth();
+        const sink = new CanvasSink(track, displayWidth > SCAN_WIDTH ? { width: SCAN_WIDTH } : undefined);
 
-    const frames: SceneFrame[] = [];
-    let width = 0;
-    let height = 0;
-    for await (const wrapped of sink.canvases()) {
-      const { canvas } = wrapped;
-      width = canvas.width;
-      height = canvas.height;
-      const frame = canvas.getContext("2d", { willReadFrequently: true });
-      if (!frame || !("getImageData" in frame)) {
-        throw new DapiError("unsupported", "Keying needs a 2D canvas context, which is unavailable.");
+        const frames: SceneFrame[] = [];
+        let width = 0;
+        let height = 0;
+        for await (const wrapped of sink.canvases()) {
+          const { canvas } = wrapped;
+          width = canvas.width;
+          height = canvas.height;
+          const frame = canvas.getContext("2d", { willReadFrequently: true });
+          if (!frame || !("getImageData" in frame)) {
+            throw new DapiError("unsupported", "Keying needs a 2D canvas context, which is unavailable.");
+          }
+          const pixels = frame.getImageData(0, 0, width, height).data;
+          const data = new Uint8Array(width * height * 3);
+          for (let i = 0, j = 0; i < pixels.length; i += 4, j += 3) {
+            data[j] = pixels[i]!;
+            data[j + 1] = pixels[i + 1]!;
+            data[j + 2] = pixels[i + 2]!;
+          }
+          frames.push({ data, width, height, time: Math.max(0, wrapped.timestamp - firstTimestamp) });
+        }
+        if (!frames.length) throw new DapiError("not-found", `No frames could be decoded from ${asset.path}.`);
+
+        let found;
+        try {
+          found = keyClip(frames, {
+            ...(screen !== undefined ? { screen } : {}),
+            ...(tolerance !== undefined ? { tolerance } : {}),
+            ...(softness !== undefined ? { softness } : {}),
+          });
+        } catch (error) {
+          throw new DapiError("invalid-input", error instanceof Error ? error.message : String(error));
+        }
+        return {
+          path: asset.path,
+          width,
+          height,
+          verdict: found.verdict,
+          screen: found.screen,
+          screenSaturation: found.screenSaturation,
+          samples: found.samples,
+          meanFg: found.meanFg,
+          meanEdge: found.meanEdge,
+          frames: found.frames,
+          seconds: found.seconds,
+        };
+      } finally {
+        input.dispose();
       }
-      const pixels = frame.getImageData(0, 0, width, height).data;
-      const data = new Uint8Array(width * height * 3);
-      for (let i = 0, j = 0; i < pixels.length; i += 4, j += 3) {
-        data[j] = pixels[i]!;
-        data[j + 1] = pixels[i + 1]!;
-        data[j + 2] = pixels[i + 2]!;
-      }
-      frames.push({ data, width, height, time: Math.max(0, wrapped.timestamp - firstTimestamp) });
-    }
-    if (!frames.length) throw new DapiError("not-found", `No frames could be decoded from ${asset.path}.`);
-
-    let found;
-    try {
-      found = keyClip(frames, {
-        ...(screen !== undefined ? { screen } : {}),
-        ...(tolerance !== undefined ? { tolerance } : {}),
-        ...(softness !== undefined ? { softness } : {}),
-      });
-    } catch (error) {
-      throw new DapiError("invalid-input", error instanceof Error ? error.message : String(error));
-    }
-    return {
-      path: asset.path,
-      width,
-      height,
-      verdict: found.verdict,
-      screen: found.screen,
-      screenSaturation: found.screenSaturation,
-      samples: found.samples,
-      meanFg: found.meanFg,
-      meanEdge: found.meanEdge,
-      frames: found.frames,
-      seconds: found.seconds,
-    };
-  } finally {
-    input.dispose();
-  }
+    },
+  });
+  return { ...result, cached };
 };

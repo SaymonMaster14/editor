@@ -27,6 +27,7 @@ export const mediaStabilize = defineTool({
     path: z.string(),
     width: z.number().describe("decoded scan width, px"),
     height: z.number().describe("decoded scan height, px"),
+    cached: z.boolean().describe("true when the result was reused from the analysis cache without re-decoding"),
   }),
   environment: "renderer",
 });

@@ -28,6 +28,7 @@ export const mediaRetime = defineTool({
   }),
   output: RetimeMeasurement.extend({
     path: z.string(),
+    cached: z.boolean().describe("true when the result was reused from the analysis cache without re-decoding"),
   }),
   environment: "renderer",
 });

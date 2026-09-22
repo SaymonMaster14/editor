@@ -14,6 +14,10 @@ import { join } from "node:path";
 
 import { cacheKey } from "./hash";
 
+import type { ArtifactSpec, FailureRecord } from "./artifact-spec";
+
+export type { ArtifactSpec, FailureRecord } from "./artifact-spec";
+
 export type AnalysisArtifact = {
   /** The cache key: stable for identical source + params + engine. */
   id: string;
@@ -30,25 +34,12 @@ export type AnalysisArtifact = {
   metadata: Record<string, unknown>;
 };
 
-export type ArtifactSpec = {
-  kind: string;
-  sourceHash: string;
-  parametersHash: string;
-  engine: string;
-  engineVersion: string;
-  duration?: number;
-  fps?: number;
-  metadata?: Record<string, unknown>;
-};
-
 export type ArtifactStoreOptions = {
   /** Project root: artifacts go under `<root>/analysis/`. */
   projectDir: string;
   /** Global dedup cache root (optional): `<root>/<kind>/<id>/`. */
   globalDir?: string;
 };
-
-export type FailureRecord = { error: string; at: string; spec: ArtifactSpec };
 
 const ARTIFACT_FILE = "artifact.json";
 const FAILURE_FILE = "failed.json";

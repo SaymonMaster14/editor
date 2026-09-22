@@ -29,6 +29,7 @@ export const mediaScenes = defineTool({
     path: z.string(),
     width: z.number().describe("decoded frame width, px"),
     height: z.number().describe("decoded frame height, px"),
+    cached: z.boolean().describe("true when the result was reused from the analysis cache without re-decoding"),
   }),
   environment: "renderer",
 });
