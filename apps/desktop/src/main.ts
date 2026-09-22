@@ -24,6 +24,7 @@ import { mainBridge } from "./main-manager";
 import { MAIN_CHANNELS } from "./main-channels";
 import { resolvePython, segmentPaths, SegmentWorker } from "./segment-worker";
 import { DEPTH_IMPORTS, depthPaths, DepthWorker, resolveDepthPython } from "./depth-worker";
+import { FLOW_IMPORTS, flowPaths, FlowWorker, resolveFlowPython } from "./flow-worker";
 import {
   compileProject,
   createProject,
@@ -178,6 +179,37 @@ function createDepthWorker(): DepthWorker {
     userData: app.getPath("userData"),
   });
   return new DepthWorker({ python, scriptPath, modelsDir, log: (message) => console.error(message) });
+}
+
+// The flow worker: same one-persistent-child policy as segmentation and
+// depth. All three models stay resident once used (RAFT-small ~1 GB VRAM
+// on top of the ~450 MB already there), inside the 8 GB budget; all
+// unload on quit.
+let flowWorker: FlowWorker | null = null;
+
+type FlowRunRequest = MainRequestMap[typeof MAIN_CHANNELS.FLOW_RUN]["request"];
+
+async function flowRun(request: FlowRunRequest) {
+  flowWorker ??= createFlowWorker();
+  return flowWorker.flow(request.pngA, request.pngB, request.engine);
+}
+
+function createFlowWorker(): FlowWorker {
+  const python = resolveFlowPython();
+  if (!python) {
+    throw new Error(
+      `Optical flow needs a Python 3 with ${FLOW_IMPORTS.join(", ")} installed; none was found. ` +
+        `Run \`python -m pip install ${FLOW_IMPORTS.join(" ")}\` in the interpreter you want the app to use, and retry. ` +
+        "Set DIFFUSION_STUDIO_PYTHON to point at a specific interpreter.",
+    );
+  }
+  const { scriptPath, modelsDir } = flowPaths({
+    isPackaged: app.isPackaged,
+    appPath: app.getAppPath(),
+    resourcesPath: process.resourcesPath,
+    userData: app.getPath("userData"),
+  });
+  return new FlowWorker({ python, scriptPath, modelsDir, log: (message) => console.error(message) });
 }
 
 // The docs the MCP instructions point agents at: staged into the bundle by
@@ -362,6 +394,7 @@ if (app.requestSingleInstanceLock()) {
   mainBridge.handle(MAIN_CHANNELS.ASSETS_DOWNLOAD, (request) => downloadInternetAsset(request));
   mainBridge.handle(MAIN_CHANNELS.SEGMENT_RUN, (request) => segmentRun(request));
   mainBridge.handle(MAIN_CHANNELS.DEPTH_RUN, (request) => depthRun(request));
+  mainBridge.handle(MAIN_CHANNELS.FLOW_RUN, (request) => flowRun(request));
   mainBridge.handle(MAIN_CHANNELS.PROJECTS_PICK_ROOT, () => pickRoot(mainWindow));
   mainBridge.handle(MAIN_CHANNELS.PROJECTS_PICK_FOLDER, () => pickFolder(mainWindow));
   mainBridge.handle(MAIN_CHANNELS.PROJECTS_DEFAULT_ROOT, () => defaultRoot(mainWindow));
@@ -493,6 +526,8 @@ if (app.requestSingleInstanceLock()) {
     segmentWorker = null;
     void depthWorker?.stop();
     depthWorker = null;
+    void flowWorker?.stop();
+    flowWorker = null;
   });
 
   app.on("window-all-closed", () => {

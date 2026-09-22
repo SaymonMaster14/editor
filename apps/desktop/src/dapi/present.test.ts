@@ -197,6 +197,47 @@ describe("present", () => {
     expect(presented.images).toEqual([{ path: join(out, "preview.png"), png: png(22) }]);
   });
 
+  it("writes a flow field plus its Middlebury preview", async () => {
+    const out = join(dir, "flow");
+    const presented = await present(
+      "media_flow",
+      { path: "/c.mp4", output: out },
+      {
+        path: "/c.mp4",
+        time: 1,
+        timeB: 1.033,
+        width: 8,
+        height: 4,
+        engine: "raft-small",
+        device: "cuda:0",
+        ms: 812,
+        meanMag: 3.42,
+        p95Mag: 9.81,
+        flow: png(23),
+        preview: png(24),
+        cached: false,
+      },
+    );
+    expect(presented.output).toEqual({
+      path: "/c.mp4",
+      time: 1,
+      timeB: 1.033,
+      width: 8,
+      height: 4,
+      engine: "raft-small",
+      device: "cuda:0",
+      ms: 812,
+      meanMag: 3.42,
+      p95Mag: 9.81,
+      flow: join(out, "flow.npy"),
+      preview: join(out, "preview.png"),
+      cached: false,
+    });
+    expect(readFileSync(join(out, "flow.npy"))).toEqual(Buffer.from(png(23)));
+    expect(readFileSync(join(out, "preview.png"))).toEqual(Buffer.from(png(24)));
+    expect(presented.images).toEqual([{ path: join(out, "preview.png"), png: png(24) }]);
+  });
+
   it("passes other results through untouched", async () => {
     expect(await present("check", { id: "x" }, { stats: {}, issues: [] })).toEqual({ output: { stats: {}, issues: [] }, images: [] });
   });

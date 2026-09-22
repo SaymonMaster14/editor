@@ -56,6 +56,7 @@ const TIMEOUTS: Record<string, number> = {
   media_listen: 600_000,
   media_segment: 600_000,
   media_depth: 600_000,
+  media_flow: 600_000,
   assets_import: 600_000,
 };
 

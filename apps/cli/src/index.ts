@@ -382,6 +382,18 @@ media
   );
 
 media
+  .command("flow")
+  .description(describe("media_flow"))
+  .argument("<path>", field("media_flow", "path"))
+  .option("-t, --time <s>", field("media_flow", "time"), numeric)
+  .option("-d, --dt <s>", field("media_flow", "dt"), numeric)
+  .option("-e, --engine <name>", field("media_flow", "engine"))
+  .option("-o, --output <dir>", field("media_flow", "output"))
+  .action((ref: string, opts: Omit<ToolInput<"media_flow">, "path">) =>
+    run("media_flow", { path: assetPath(ref), ...opts, output: opts.output && resolve(opts.output) }),
+  );
+
+media
   .command("filmstrip")
   .alias("film")
   .description(describe("media_filmstrip"))

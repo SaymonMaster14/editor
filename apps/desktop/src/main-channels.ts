@@ -9,7 +9,7 @@
 //
 // Tool calls from the MCP server use their own wire (DAPI_WIRE in
 // @diffusionstudio/dapi), in the other direction: main asks, the renderer answers.
-import type { DepthWorkerResult, LogEntry, ScreenshotResult, SegmentWorkerResult } from "@diffusionstudio/dapi";
+import type { DepthWorkerResult, FlowWorkerResult, LogEntry, ScreenshotResult, SegmentWorkerResult } from "@diffusionstudio/dapi";
 import type { SourceEdit, WriteResult } from "./edit-types";
 import type { AgentId } from "./mcp-config";
 import type {
@@ -80,6 +80,7 @@ export const MAIN_CHANNELS = {
   ASSETS_DOWNLOAD: "assets:download",
   SEGMENT_RUN: "segment:run",
   DEPTH_RUN: "depth:run",
+  FLOW_RUN: "flow:run",
 
   // Main→Renderer events
   AUTH_CALLBACK: "auth:callback",
@@ -357,6 +358,12 @@ export type MainRequestMap = {
   [MAIN_CHANNELS.DEPTH_RUN]: {
     request: { png: Uint8Array };
     response: DepthWorkerResult;
+  };
+  // Two frames to the flow worker: same shape as depth, doubled — the
+  // float32 field and its Middlebury preview come back as bytes.
+  [MAIN_CHANNELS.FLOW_RUN]: {
+    request: { pngA: Uint8Array; pngB: Uint8Array; engine: "dis" | "raft" };
+    response: FlowWorkerResult;
   };
 };
 

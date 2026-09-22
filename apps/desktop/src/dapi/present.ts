@@ -33,6 +33,8 @@ export async function present(name: ToolName, args: unknown, result: unknown): P
       return presentSegment(result as ToolResult<"media_segment">, (args as ToolArgs<"media_segment">).output);
     case "media_depth":
       return presentDepth(result as ToolResult<"media_depth">, (args as ToolArgs<"media_depth">).output);
+    case "media_flow":
+      return presentFlow(result as ToolResult<"media_flow">, (args as ToolArgs<"media_flow">).output);
     case "media_filmstrip":
       return presentPreview(result as ToolResult<"media_filmstrip">, (args as ToolArgs<"media_filmstrip">).output, "filmstrip");
     case "media_waveform":
@@ -209,6 +211,36 @@ async function presentDepth(result: ToolResult<"media_depth">, output: string | 
     dmin: result.dmin,
     dmax: result.dmax,
     depth: depthPath,
+    preview: previewPath,
+    cached: result.cached,
+  };
+  return { output: presented, images: [{ path: previewPath, png: result.preview }] };
+}
+
+/**
+ * Flow lands as two files: `flow.npy` (the full-precision float32 field
+ * for stabilization/retiming/masks) and `preview.png` (Middlebury
+ * visualization, for eyeballing). Only the preview rides inline.
+ */
+async function presentFlow(result: ToolResult<"media_flow">, output: string | undefined): Promise<Presented> {
+  const dir = output ?? (await mkdtemp(join(tmpdir(), "dapi-flow-")));
+  await mkdir(dir, { recursive: true });
+  const flowPath = join(dir, "flow.npy");
+  const previewPath = join(dir, "preview.png");
+  await writeFile(flowPath, result.flow);
+  await writeFile(previewPath, result.preview);
+  const presented: ToolOutput<"media_flow"> = {
+    path: result.path,
+    time: result.time,
+    timeB: result.timeB,
+    width: result.width,
+    height: result.height,
+    engine: result.engine,
+    device: result.device,
+    ms: result.ms,
+    meanMag: result.meanMag,
+    p95Mag: result.p95Mag,
+    flow: flowPath,
     preview: previewPath,
     cached: result.cached,
   };

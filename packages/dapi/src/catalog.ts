@@ -34,6 +34,7 @@ import { mediaScopes } from "./tools/media-scopes";
 import { mediaEffects } from "./tools/media-effects";
 import { mediaSegment } from "./tools/media-segment";
 import { mediaDepth } from "./tools/media-depth";
+import { mediaFlow } from "./tools/media-flow";
 import { audioLoudness } from "./tools/audio-loudness";
 import { audioBeats } from "./tools/audio-beats";
 import { fonts } from "./tools/fonts";
@@ -69,6 +70,7 @@ export const catalog = [
   mediaEffects,
   mediaSegment,
   mediaDepth,
+  mediaFlow,
   audioLoudness,
   audioBeats,
   models,
