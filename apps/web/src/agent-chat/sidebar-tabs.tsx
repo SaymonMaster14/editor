@@ -10,6 +10,7 @@ const TABS: { id: SidebarTab; label: string }[] = [
   { id: "assets", label: "Project" },
   { id: "effects", label: "Effects" },
   { id: "transitions", label: "Transitions" },
+  { id: "search", label: "Search" },
   { id: "chat", label: "Chat" },
 ];
 

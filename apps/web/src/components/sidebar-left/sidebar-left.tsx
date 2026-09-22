@@ -5,6 +5,7 @@
 import { Assets } from "./assets";
 import { EffectsPanel } from "./effects-panel";
 import { TransitionsPanel } from "./transitions-panel";
+import { SearchPanel } from "./search-panel";
 import { ChatPanel, sidebarTab } from "@/agent-chat";
 import { useLayout } from "@/context/layout";
 import { useEditorApi } from "@/dapi";
@@ -29,6 +30,9 @@ export function SidebarLeft() {
       </Show>
       <Show when={sidebarTab() === "transitions"}>
         <TransitionsPanel />
+      </Show>
+      <Show when={sidebarTab() === "search"}>
+        <SearchPanel />
       </Show>
       <Show when={sidebarTab() === "chat"}>
         <ChatPanel />

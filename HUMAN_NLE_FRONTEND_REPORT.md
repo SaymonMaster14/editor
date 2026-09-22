@@ -21,51 +21,55 @@ J/K/L + I/O + `,`/`.` + M shortcuts, undo/redo, SourceMonitorPanel, asset librar
 - Q/W ripple to playhead: new canonical `rippleTrimPreviousToPlayhead` (trim head + close gap,
   snapshot-based, one gesture) + existing `rippleTrimOut`; one unit per parent (selected wins).
   `W`/`S` ±1s seek moved to `Shift+W`/`Shift+S`; plain `S` unbound.
-- Shift+Delete/Backspace ripple-delete (`extract`); row menu: Split at playhead, Lift, Ripple delete;
+- Shift+Delete/Backspace ripple-delete (`extract`); Alt+Arrows slide/slip;
+  Rolling Edit tool (`N`) with edge-drag through canonical clamped write;
+  row menu: Split at playhead, Lift, Ripple delete;
   right-click selects the row first (keeps multi-selection when inside it).
 - Timeline: NLE/Compact view toggle (persisted, instant, same rows/selection/playhead/zoom);
-  projected V/A badges (audio-only rows A1.. top-down, rest V1.. bottom-up); NLE-persistent
-  mute/solo/visibility; undo/redo buttons with live states.
+  mute/solo/visibility; undo/redo buttons with live states + History menu
+  (attributed step labels, undo/redo-to-here).
 - Viewer: transport bar (prev/next edit via new `seek-edit.ts`, frame step, play, loop, timecode)
-  + Source+Program toggle (default program-only; source pane reuses SourceMonitorPanel).
 - Sidebar: Project (=Assets), Effects (8 real, apply authors canonical `<effect>`),
-  Transitions (5 real, apply writes canonical whole `transition` prop), Chat untouched.
+  Transitions (5 real, apply writes canonical whole `transition` prop),
+  Search (provider fan-out in main + guarded import with provenance, sharing
+  `importInternetAsset` with `assets_import`), Chat untouched.
 - Agent parity (no human/agent divergence): `timeline_edit` gains `split`
   (targeted at frame, or playhead-wide) and `rippleTrimPreviousToPlayhead`; catalog + CLI help updated.
 
 ## Backend glue added (genuinely missing)
 
-`rippleTrimPreviousToPlayhead` (`engine/nle.ts`), `splitOneAtFrame`/`splitClipAtFrame`
-(`engine/split.tsx`), `nle-actions.tsx` human verbs, `seek-edit.ts` edit-point nav,
-`source-pane.tsx`, `transport.tsx`, effects/transitions panels, viewer/timeline layout state.
+`rippleTrimPreviousToPlayhead` + `rollPairAt`/`writeRollPair` (`engine/nle.ts`),
+`splitOneAtFrame`/`splitClipAtFrame` (`engine/split.tsx`), `nle-actions.tsx` human verbs,
+`seek-edit.ts` edit-point nav, `applyRoll` (timeline drag), `labelStep`/`describeOps`
+(`engine/history.ts`), `internet-import.ts` (shared search+import), `source-pane.tsx`,
+`transport.tsx`, effects/transitions/search panels, viewer/timeline layout state.
 No second engines; no shadow state; arch checker clean.
 
 ## Verification
 
-- `tsc --noEmit` clean (web, dapi, cli); `check:architecture` PASS 0 errors (839 files);
-  workspace tests all pass; `tmp/nle-e2e/proof.mjs` **34/34 green on a source dev stack**,
+- `tsc --noEmit` clean (web, dapi, cli); `check:architecture` PASS, 0 errors;
+  workspace tests all pass; `tmp/nle-e2e/proof.mjs` **33/33 green on a source dev stack**,
   including new split + Q single-step-undo assertions. The fire-test caught one real bug
   (Q landing the trimmed clip at `oldStart − delta`), fixed and re-proven.
+- Stock path proven live: wikimedia search → candidate import with full provenance
+  through the refactored shared `importInternetAsset` (agent handler thinned onto it).
 - Screenshots: app-window capture returns black in this session (no compositor) — no visuals attached.
 
 ## Remaining gaps (honest)
 
 Backend-only/agent-only: tracking, stabilization, reframe, keying, segmentation, depth,
 optical flow, retime maps, scopes/grade-apply (dead code), procedural FX (preview-only),
-QA/integrity gates, beats/LUFS numbers, internet-asset search (no stock tab), proxies
-(no backend at all), transcript word-cutting, mixer. Analysis-only systems are NOT
-presented as production effects. No labeled history panel (history records ops, not
-causes — buttons + shortcuts are the exposure). No canvas-clip right-click menu
-(immediate-mode canvas has no menu infra; row + bin menus cover the ops).
-No track lock / source patching yet. Plain `S` intentionally unbound.
+QA/integrity gates, beats/LUFS numbers, proxies (no backend at all), transcript
+word-cutting, mixer. Analysis-only systems are NOT presented as production effects.
+No canvas-clip right-click menu (immediate-mode canvas has no menu infra; row and
+bin menus cover the ops). No track lock / source patching yet. Plain `S` intentionally unbound.
 
 
 | CAPABILITY | BACKEND | FRONTEND | HUMAN TESTED | AGENT ACCESS | NOTES |
 |---|---|---|---|---|---|
 | timeline split/razor | split.tsx | toolbar+C+click+menu | live CLI | split op (new) | single-step undo proven |
-| lift / ripple delete | nle.ts | menu+Shift+Del | live CLI | timeline_edit | — |
+| roll/slip/slide/move/trim | nle.ts/timing.ts | move/trim/roll-drags, Alt+Arrow slide/slip, N tool | live CLI (slip/slide/roll) | timeline_edit | roll pair/write shared by tool+DAPI |
 | Q/W ripple trim | nle.ts (Q new) | Q/W keys | live CLI (Q) | both ops | W via rippleTrimOut |
-| roll/slip/slide/move/trim | nle.ts/timing.ts | move/trim drags, Alt+Arrow slide/slip | live CLI (slip/slide) | timeline_edit | roll gesture still agent-only |
 | source monitor/insert/overwrite | source-edit.ts | SourceMonitorPanel + dual viewer | pre-existing | source_edit | same trait |
 | markers | markers.ts | ruler+menu+M | pre-existing | marker | — |
 | keyframes | keyframes.tsx | diamonds+inspector | pre-existing | keyframe | — |
@@ -74,13 +78,11 @@ No track lock / source patching yet. Plain `S` intentionally unbound.
 | transitions (5) | runtime Transition | browser+inspector | tsc only | — | — |
 | color/scopes/grade | color pkg | none | no | media_scopes | grade-apply dead code |
 | tracking/stabilize/reframe/key/depth/segment/flow/retime | pkgs | none | no | media_* | analysis-only, correctly unexposed |
-| nested sequences/groups/scenes | group.tsx | menus+drag | pre-existing | — | — |
+| internet assets | providers+main IPC | Search tab (desktop) | live CLI search+import | assets_search/import | shared importInternetAsset; keyed providers need env keys |
 | adjustment layers | runtime trait | inspect+render | pre-existing | — | no dedicated creator |
 | text/captions | runtime+genai | text tool+caption panel | pre-existing | — | no word-cut editing |
 | proxies | missing | none | no | — | no backend |
 | relink/offline | library.ts | asset menu+info | pre-existing | — | — |
-| internet assets | providers | none | no | assets_search/import | no stock tab (import path must stay canonical) |
 | export | encoder | export panel | pre-existing | export | — |
-| undo/redo | history.ts | buttons+shortcuts | live CLI | timeline_edit | no labeled panel |
 | transport/viewer modes | timing/playback | transport bar+toggle | tsc only | — | black screenshots, no visual proof |
-| NLE/compact timeline | same rows | toggle+badges | tsc only | — | projection, model untouched |
+| undo/redo | history.ts | buttons+History menu w/ labels | live CLI | timeline_edit | Human verbs + Agent ops attributed |
