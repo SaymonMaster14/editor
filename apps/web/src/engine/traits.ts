@@ -86,6 +86,21 @@ export const PointerEvents = trait({ queue: () => [] as CanvasPointerEvent[] });
 export const AssetSelection = trait({ id: null as string | null });
 
 /**
+ * The source monitor: the library asset loaded for source editing, where
+ * its preview sits, and the in/out range marked on it — all in source
+ * seconds. The monitor UI, the I/O shortcuts, insert/overwrite, and the
+ * `source_edit` tool all read and write this one trait, so the human’s
+ * range and the agent’s range are the same range. Editor state, never
+ * authored: nothing here reaches the source.
+ */
+export const SourceMonitor = trait({
+	assetId: null as string | null,
+	position: 0,
+	in: 0,
+	out: 0,
+});
+
+/**
  * The config of the project on disk (its package.json `diffusion` field),
  * attached while a project is open; see `./project-config`. The handle only,
  * like Library: the values are its own reactive state.

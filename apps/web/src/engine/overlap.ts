@@ -32,7 +32,6 @@ import type { Entity, World } from 'koota';
 export function resolveSequentialOverlaps(world: World, dragged: Entity[]): void {
 	if (dragged.length === 0) return;
 
-	const editor = getDocumentEditor(world);
 	const computed = store(world, Computed);
 	const ignore = new Set(dragged);
 
@@ -44,15 +43,35 @@ export function resolveSequentialOverlaps(world: World, dragged: Entity[]): void
 		const occEnd = computed.end[entity.id()];
 		if (occStart === undefined || occEnd === undefined || occEnd <= occStart) continue;
 
-		// Snapshot before mutating: resolving removes, trims and copies, all of
-		// which change the live query — and a copy a split makes is the other
-		// half of a sibling already dealt with, not another one to deal with.
-		const siblings = [...world.query(Or(Geometry, Group), ChildOf(parent))]
-			.filter((sibling) => !ignore.has(sibling));
+		resolveSpanOverlap(world, parent, occStart, occEnd, ignore);
+	}
+}
 
-		for (const sibling of siblings) {
-			resolveEntityOverlap(world, editor, sibling, occStart, occEnd, ignore);
-		}
+/**
+ * Settles a sequence against the span `[occStart, occEnd)` something else
+ * has taken, given as frames rather than read off an entity: the settle a
+ * drop gets, for a clip whose Computed span is not there to be read yet (a
+ * clip placed by an overwrite a moment ago). `ignore` is what keeps what it
+ * has — the clip the span was taken for.
+ */
+export function resolveSpanOverlap(
+	world: World,
+	parent: Entity,
+	occStart: number,
+	occEnd: number,
+	ignore: Set<Entity>,
+): void {
+	if (occEnd <= occStart) return;
+	const editor = getDocumentEditor(world);
+
+	// Snapshot before mutating: resolving removes, trims and copies, all of
+	// which change the live query — and a copy a split makes is the other
+	// half of a sibling already dealt with, not another one to deal with.
+	const siblings = [...world.query(Or(Geometry, Group), ChildOf(parent))]
+		.filter((sibling) => !ignore.has(sibling));
+
+	for (const sibling of siblings) {
+		resolveEntityOverlap(world, editor, sibling, occStart, occEnd, ignore);
 	}
 }
 

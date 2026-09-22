@@ -20,6 +20,13 @@ export interface InsertAssetOptions {
 	y?: number;
 	/** Where on the timeline the clip starts, in seconds; the playhead by default. */
 	start?: number;
+	/**
+	 * The id to author on the element. Without one the writer mints an
+	 * unreadable stamp on sync; a caller that names the clip up front gets
+	 * that name back as its address — worth doing when the caller (an NLE
+	 * edit, an agent) will point at the clip again afterwards.
+	 */
+	id?: string;
 }
 
 /** The box an audio clip gets on the canvas: it has no size of its own. */
@@ -42,26 +49,27 @@ export function insertAsset(world: World, asset: Asset, options: InsertAssetOpti
 	const size = sizeOf(asset);
 	const position = size ? placement(world, parent, size, options) : {};
 	const timing = start > 0 ? { start } : {};
+	const identity = options.id ? { id: options.id } : {};
 
 	const [entity] = editor.insertElement(parent, () => {
 		switch (asset.type) {
 			case 'VIDEO':
 			case 'SEQUENCE':
 				return (
-					<Rect name={name} keepAspectRatio {...position} {...size} {...timing}>
+					<Rect name={name} keepAspectRatio {...position} {...size} {...timing} {...identity}>
 						<VideoPaint src={src} />
 					</Rect>
 				);
 			case 'IMAGE':
 				return (
-					<Rect name={name} keepAspectRatio {...position} {...size} {...timing}>
+					<Rect name={name} keepAspectRatio {...position} {...size} {...timing} {...identity}>
 						<ImagePaint src={src} />
 					</Rect>
 				);
 			case 'AUDIO':
-				return <Audio name={name} src={src} {...position} {...size} {...timing} />;
+				return <Audio name={name} src={src} {...position} {...size} {...timing} {...identity} />;
 			case 'TRANSCRIPT':
-				return <Captions src={src} {...timing} />;
+				return <Captions src={src} {...timing} {...identity} />;
 			default:
 				return null;
 		}
