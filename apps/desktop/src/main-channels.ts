@@ -12,6 +12,12 @@
 import type { LogEntry, ScreenshotResult } from "@diffusionstudio/dapi";
 import type { SourceEdit, WriteResult } from "./edit-types";
 import type { AgentId } from "./mcp-config";
+import type {
+  InternetDownloadRequest,
+  InternetDownloadResult,
+  InternetSearchRequest,
+} from "./assets-fetch";
+import type { MultiSearchResult } from "@diffusionstudio/assets/internet";
 
 export const MAIN_WIRE = {
   REQUEST: "main:request",
@@ -70,6 +76,8 @@ export const MAIN_CHANNELS = {
   CLI_STATUS: "cli:status",
   CLI_INSTALL: "cli:install",
   CLI_UNINSTALL: "cli:uninstall",
+  ASSETS_SEARCH: "assets:search",
+  ASSETS_DOWNLOAD: "assets:download",
 
   // Main→Renderer events
   AUTH_CALLBACK: "auth:callback",
@@ -326,6 +334,15 @@ export type MainRequestMap = {
   [MAIN_CHANNELS.CLI_STATUS]: { request: void; response: CliStatus };
   [MAIN_CHANNELS.CLI_INSTALL]: { request: void; response: CliInstallResult };
   [MAIN_CHANNELS.CLI_UNINSTALL]: { request: void; response: CliUninstallResult };
+  // Internet asset acquisition in main (no CORS, DNS-checked downloads).
+  [MAIN_CHANNELS.ASSETS_SEARCH]: {
+    request: InternetSearchRequest;
+    response: MultiSearchResult;
+  };
+  [MAIN_CHANNELS.ASSETS_DOWNLOAD]: {
+    request: InternetDownloadRequest;
+    response: InternetDownloadResult;
+  };
 };
 
 export type FsEntry = {

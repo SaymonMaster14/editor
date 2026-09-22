@@ -3,6 +3,7 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 import { open } from "./open";
+import { assetsImport } from "./assets-import";
 import { qaSweep } from "./qa-sweep";
 import { context } from "./context";
 import { capture } from "./capture";
@@ -24,6 +25,7 @@ import type { Handlers } from "../handler";
 /** Every tool the renderer answers, keyed by its catalog name. */
 export const handlers: Handlers = {
   open,
+  assets_import: assetsImport,
   context,
   capture,
   check,

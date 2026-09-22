@@ -14,6 +14,7 @@ import { isAssetRef, mapAssetInputs } from '@diffusionstudio/jsx';
 import type { Accessor } from 'solid-js';
 
 import { createProjectFS } from '@/projects/fs';
+import { desktopFetcher } from '@/lib/assets-fetch';
 import { getDocumentEditor } from './editor';
 
 import type { Asset } from '@diffusionstudio/assets';
@@ -27,7 +28,11 @@ import type { World } from 'koota';
  * disposer that flushes the manifest and detaches it.
  */
 export function attachLibrary(world: World, dir: string) {
+	// Remote bytes download through main (guarded, DNS-checked) in desktop;
+	// undefined elsewhere, so the library uses its own guarded download.
+	const fetcher = desktopFetcher();
 	const library = new AssetLibrary(createProjectFS(dir), {
+		...(fetcher ? { fetcher } : {}),
 		onRename: (asset, from) => followRename(world, asset, from),
 		onRelink: (asset, from) => followRelink(world, asset, from),
 	});

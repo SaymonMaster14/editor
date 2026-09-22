@@ -45,6 +45,7 @@
     "@babel/core": "^7.29.7",
     "@babel/preset-typescript": "^7.27.1",
     "@diffusionstudio/agent-chat": "*",
+    "@diffusionstudio/assets": "*",
     "@diffusionstudio/dapi": "*",
     "@diffusionstudio/jsx": "*",
     "@diffusionstudio/winpaths": "*",

@@ -25,6 +25,7 @@
 import { createSignal, type Accessor } from 'solid-js';
 
 import { AssetCache } from './cache';
+import { downloadUrl } from './download';
 import { hashBlob, hashKey, hashSequence } from './hash';
 import {
 	ASSETS_DIR, isAbsoluteSource, isPartialRecord, isProjectSource, isUrlSource, normalizeManifest, toRecord,
@@ -34,6 +35,7 @@ import { assetFolder, assetName, basename, dirname, isPartialAsset, joinPath, no
 
 import type { FsEntry, ProjectFS } from './fs';
 import type { AssetRecord, Manifest } from './manifest';
+import type { AssetProvenance } from './provenance';
 import type {
 	Asset, AssetDirectoryHandle, AssetEntry, AssetFileHandle, AssetGeneration, AssetType, PartialAsset, SequenceAsset,
 } from './types';
@@ -52,6 +54,13 @@ export interface LibraryOptions {
 	 * the host can rebind whatever held the old one (`from`).
 	 */
 	onRelink?: (asset: Asset, from: string) => void;
+	/**
+	 * Downloads remote bytes for URL imports and URL-backed handles. The
+	 * desktop host provides one backed by the main process (full guards
+	 * plus DNS checks); without it the library uses the shared hardened
+	 * download in whatever runtime it runs in.
+	 */
+	fetcher?: (url: string) => Promise<Blob>;
 }
 
 export interface ImportResult {
@@ -67,6 +76,8 @@ export interface ImportOptions {
 	/** Library name; the source's file name by default. */
 	name?: string;
 	generation?: AssetGeneration;
+	/** Where an import came from; stored on the asset with it. */
+	provenance?: AssetProvenance;
 }
 
 export interface ReserveOptions {
@@ -103,6 +114,7 @@ export class AssetLibrary {
 	private readonly map = new Map<string, AssetEntry>();
 	private readonly onRename: LibraryOptions['onRename'];
 	private readonly onRelink: LibraryOptions['onRelink'];
+	private readonly fetcher: LibraryOptions['fetcher'];
 	private inflight = new Map<string, Promise<Asset>>();
 	private saveTimer: ReturnType<typeof setTimeout> | undefined;
 	private saving: Promise<void> = Promise.resolve();
@@ -114,6 +126,7 @@ export class AssetLibrary {
 		this.cache = new AssetCache(fs);
 		this.onRename = options.onRename;
 		this.onRelink = options.onRelink;
+		this.fetcher = options.fetcher;
 		[this.assets, this.setAssets] = createSignal<Asset[]>([]);
 		[this.partials, this.setPartials] = createSignal<PartialAsset[]>([]);
 		[this.folders, this.setFolders] = createSignal<ReadonlySet<string>>(new Set());
@@ -411,9 +424,7 @@ export class AssetLibrary {
 
 	private async importOne(source: string, options: ImportOptions): Promise<Asset[]> {
 		if (isUrlSource(source)) {
-			const response = await fetch(source);
-			if (!response.ok) throw new Error(`Failed to fetch ${source}: ${response.status}`);
-			const blob = await response.blob();
+			const blob = await this.fetchUrl(source);
 			const name = options.name ?? basename(source.split(/[?#]/)[0]!) ?? 'download';
 			return [await this.store(blob, { ...options, name })];
 		}
@@ -461,6 +472,11 @@ export class AssetLibrary {
 		const stored = this.add(asset);
 		if (options.generation && stored.generation?.key !== key) {
 			this.update(stored, { generation: options.generation });
+		}
+		// A redownload of bytes the library already holds keeps the first
+		// provenance it landed with rather than rewriting history.
+		if (options.provenance && stored.provenance === undefined) {
+			this.update(stored, { provenance: options.provenance });
 		}
 		return stored;
 	}
@@ -853,14 +869,23 @@ export class AssetLibrary {
 		return { getFile: () => this.fs.file(source) };
 	}
 
+	/**
+	 * Remote bytes under guard: the host's fetcher when one is set, else
+	 * the shared hardened download wrapped as a blob of its validated
+	 * content type.
+	 */
+	private async fetchUrl(url: string): Promise<Blob> {
+		if (this.fetcher) return this.fetcher(url);
+		const { bytes, contentType } = await downloadUrl(url);
+		return new Blob([bytes as BlobPart], { type: contentType });
+	}
+
 	private urlHandle(url: string): AssetFileHandle {
 		let cached: Promise<File> | undefined;
 		return {
 			getFile: () => {
-				cached ??= fetch(url).then(async (response) => {
-					if (!response.ok) throw new Error(`Failed to fetch ${url}: ${response.status}`);
-					const blob = await response.blob();
-					return new File([blob], basename(url.split(/[?#]/)[0]!), { type: blob.type });
+				cached ??= this.fetchUrl(url).then(async (blob) => {
+					return new File([blob], basename(url.split(/[?#]/)[0]!) ?? 'download', { type: blob.type });
 				});
 				cached.catch(() => (cached = undefined));
 				return cached;

@@ -31,6 +31,6 @@ export type ToolContext = {
 export type ToolHandler<N extends ToolName> = (args: ToolArgs<N>, ctx: ToolContext) => Promise<ToolResult<N>>;
 
 /** The tools the renderer answers; the rest run in the main process. */
-export type ServedToolName = Exclude<ToolName, "logs" | "fonts" | "report">;
+export type ServedToolName = Exclude<ToolName, "logs" | "fonts" | "report" | "assets_search">;
 
 export type Handlers = { readonly [N in ServedToolName]: ToolHandler<N> };

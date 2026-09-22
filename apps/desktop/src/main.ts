@@ -10,6 +10,7 @@ import { randomUUID } from "node:crypto";
 import type { FileHandle } from "node:fs/promises";
 import { updateElectronApp } from "update-electron-app";
 import { tempPathFor } from "./atomic";
+import { downloadInternetAsset, searchInternetAssets } from "./assets-fetch";
 import { DapiServer } from "./dapi/server";
 import { agentChatEndpoint, deleteProjectChats, startAgentChat, stopAgentChat } from "./agent-chat";
 import { cliStatus, healCliInstall, installCli, uninstallCli } from "./cli-install";
@@ -295,6 +296,8 @@ if (app.requestSingleInstanceLock()) {
   mainBridge.handle(MAIN_CHANNELS.CLI_STATUS, () => cliStatus());
   mainBridge.handle(MAIN_CHANNELS.CLI_INSTALL, () => installCli());
   mainBridge.handle(MAIN_CHANNELS.CLI_UNINSTALL, () => uninstallCli());
+  mainBridge.handle(MAIN_CHANNELS.ASSETS_SEARCH, (request) => searchInternetAssets(request));
+  mainBridge.handle(MAIN_CHANNELS.ASSETS_DOWNLOAD, (request) => downloadInternetAsset(request));
   mainBridge.handle(MAIN_CHANNELS.PROJECTS_PICK_ROOT, () => pickRoot(mainWindow));
   mainBridge.handle(MAIN_CHANNELS.PROJECTS_PICK_FOLDER, () => pickFolder(mainWindow));
   mainBridge.handle(MAIN_CHANNELS.PROJECTS_DEFAULT_ROOT, () => defaultRoot(mainWindow));

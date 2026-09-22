@@ -11,6 +11,8 @@ import { capture } from "./tools/capture";
 import { check } from "./tools/check";
 import { qaSweep } from "./tools/qa-sweep";
 import { exportScene } from "./tools/export";
+import { assetsSearch } from "./tools/assets-search";
+import { assetsImport } from "./tools/assets-import";
 import { models } from "./tools/models";
 import { voices } from "./tools/voices";
 import { whoami } from "./tools/whoami";
@@ -37,6 +39,8 @@ export const catalog = [
   check,
   qaSweep,
   exportScene,
+  assetsSearch,
+  assetsImport,
   mediaProbe,
   mediaGrab,
   mediaTranscribe,

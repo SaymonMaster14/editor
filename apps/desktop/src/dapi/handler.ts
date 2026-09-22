@@ -15,7 +15,7 @@ export type MainContext = {
 };
 
 /** The tools that need the file system or a child process, not a window. */
-export type MainToolName = "logs" | "fonts" | "report";
+export type MainToolName = "logs" | "fonts" | "report" | "assets_search";
 
 export type MainHandler<N extends MainToolName> = (args: ToolArgs<N>, ctx: MainContext) => Promise<ToolResult<N>>;
 

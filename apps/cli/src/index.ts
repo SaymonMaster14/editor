@@ -3,7 +3,7 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { isAbsolute, resolve } from "node:path";
 import { Command } from "commander";
 import { z } from "zod";
@@ -213,6 +213,51 @@ media
   .option("-s, --start <time>", field("media_listen", "start"))
   .option("-e, --end <time>", field("media_listen", "end"))
   .action((ref: string, opts: Omit<ToolInput<"media_listen">, "path">) => run("media_listen", { path: assetPath(ref), ...opts }));
+const assets = program
+  .command("assets")
+  .alias("a")
+  .description(
+    "Search the internet for importable media and import files into the open project's asset library. Search needs no open project; import needs one.",
+  );
+
+assets
+  .command("search")
+  .description(describe("assets_search"))
+  .argument("<query>", field("assets_search", "query"))
+  .option("--providers <ids...>", field("assets_search", "providers"))
+  .option("-k, --kinds <kinds...>", field("assets_search", "kinds"))
+  .option("--orientation <o>", field("assets_search", "orientation"))
+  .option("--license <l>", field("assets_search", "license"))
+  .option("--no-safe", field("assets_search", "safe"))
+  .option("--page <n>", field("assets_search", "page"), numeric)
+  .option("-n, --per-page <n>", field("assets_search", "perPage"), numeric)
+  .action((query: string, opts: Omit<ToolInput<"assets_search">, "query">) => run("assets_search", { query, ...opts }));
+
+assets
+  .command("import")
+  .description(`${describe("assets_import")} The candidate JSON may be prefixed with @ to read it from a file.`)
+  .option("-c, --candidate <json>", field("assets_import", "candidate"))
+  .option("-u, --url <url>", field("assets_import", "url"))
+  .option("--alternate <label>", field("assets_import", "alternate"))
+  .option("--query <q>", field("assets_import", "query"))
+  .option("--name <name>", field("assets_import", "name"))
+  .option("--folder <folder>", field("assets_import", "folder"))
+  .action(
+    (opts: { candidate?: string; url?: string; alternate?: string; query?: string; name?: string; folder?: string }) => {
+      let candidate: ToolInput<"assets_import">["candidate"];
+      if (opts.candidate !== undefined) {
+        const raw = opts.candidate.startsWith("@") ? readFileSync(opts.candidate.slice(1), "utf8") : opts.candidate;
+        try {
+          candidate = JSON.parse(raw);
+        } catch {
+          return failSync("Could not parse --candidate as JSON.");
+        }
+      }
+      const { candidate: _raw, ...rest } = opts;
+      return run("assets_import", { ...rest, candidate });
+    },
+  );
+
 
 program
   .command("models")
