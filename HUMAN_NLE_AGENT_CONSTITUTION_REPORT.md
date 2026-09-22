@@ -31,7 +31,7 @@
 
 - NLE ops: ripple/roll/slip/slide, lift/extract — DONE (milestone below).
   Insert/overwrite, I/O range, source monitor — DONE (source milestone below).
-  Markers — still missing.
+  Markers — DONE (markers milestone below).
 - Premiere keymap gaps: frame step is on A/D, arrows nudge pixels; no edit-point
   navigation. I/O + insert/overwrite (`,`/`.`) DONE (source milestone below);
   J/K/L shuttle exists.
@@ -126,13 +126,69 @@ handler + CLI), `9421ac8` (monitor panel + shortcuts), pushed to
   Verified via a temporary `selectAsset` probe op, removed with zero
   residue before commit (no matches for it in the tree).
 
+## Milestone: canonical scene markers (plan §2–§4, §8–§10)
+
+Commit `4ee8ac1`, pushed to `fork/diffusion-on-steroids`.
+
+- Marker inspector + timeline-menu items audited first: both were dead
+  (local signals, never mounted / no `onSelect`). No marker model existed
+  anywhere. The slice mirrors the `workarea` scene-prop precedent instead
+  of inventing marker entities (no layout risk under sequential parents):
+  `Markers` runtime trait + `DEFAULT_MARKER_COLOR`
+  (`packages/runtime/src/traits/timing.ts`), `CompositionProps.markers`
+  + `SceneMarkerSpec`/`MarkerColor` (`packages/jsx/src/types.ts`, re-
+  exported), `case 'markers'` in the reconciler (dedupes to one per
+  frame, earliest first, applies the default color so a reopen reads
+  back what the add wrote).
+- `apps/web/src/engine/markers.ts` (new): `list/add/remove/move/clear/
+  seekMarker` through `editProperty` — one write, one undo step, file
+  sync. Adding where one stands updates it; moves onto an occupied frame
+  are refused (no clobbering); seeks move the playhead with no file
+  write. Drag bursts coalesce like a trim's (no gesture bracketing, per
+  `editWorkarea`); discrete singles stay single.
+- `render/markers.ts` (new, in the timeline render order): color-diamond
+  flags in the ruler's upper band — click seeks, drag moves (skips
+  occupied frames), double-click removes. Regions register after the
+  ruler's, so a flag wins the press over a scrub. Marker frames join
+  `getSnapFrames`.
+- Central shortcuts gain `M` (add at playhead), `⇧M` (next), `⌥M`
+  (previous) — the plain binding excludes the modifiers explicitly, so a
+  shifted M never also adds. Timeline menu wired: add/next/prev/clear
+  markers (⌥M moved from clear-all to previous-marker; the dead Audio
+  submenu's ⌥M label dropped), plus honest "Set work area in/out" clicks
+  replacing the dead "Mark in/out (I/O)" items (global I/O still marks
+  the source monitor — focus-sensitive routing needs a panel-focus model
+  that doesn't exist yet, see Limitations). `setWorkareaIn/Out`
+  (`timing.ts`) clamp at the opposite edge. `MarkerPanel` rewritten live
+  (flags list + seek/remove rows, time/name/color editor for the flag at
+  the playhead) and mounted for scene selections.
+- `marker` DAPI tool + renderer handler + `dapi marker` CLI
+  (add/remove/move/list/seek/clear; any time form; reports flags in
+  frames + seconds). Schema unit tests (4) colocated.
+- E2E `tmp/marker-e2e/proof.mjs`: 26/26 on the live stack — every op,
+  file sync of `<scene markers>` (incl. attribute removal on clear),
+  one-per-frame update + occupied-move refusal, time forms, one-step
+  undo/redo (sleeps past the 600ms coalesce window), error cases,
+  reopen persistence with names/colors intact.
+- Flags verified live on canvas: window screenshots prove the diamond
+  appears with the trait (green@frame-0 under the "0" tick), vanishes on
+  `clear`, and a pink@0 renders pink at the ruler origin
+  (`tmp/marker-e2e/ruler-*.png`). NLE proof re-run 27/27, source proof
+  re-run 22/22 (renderer/snapping/shortcut/menu changes
+  regression-clean).
+
 ## Fire tests
 
 NLE E2E (agent path over DAPI/CLI): 27/27 green, see milestone above.
 Source E2E (agent path): 22/22 green, see source milestone above.
-Monitor panel live-verified (mount + select→load + clean logs); physical
-key/click presses of I/O/`,`/`.` and the panel buttons are human-verified
-(see Limitations — sandbox UIPI blocks synthetic OS input here).
+Marker E2E (agent path): 26/26 green, see markers milestone above.
+Monitor panel live-verified (mount + select→load + clean logs); marker
+flags live-verified on canvas (appear/vanish/position/color via
+screenshots). Physical key/click presses of I/O/`,`/`.`, M/⇧M/⌥M, flag
+drag/click, and the panel buttons are human-verified (see Limitations —
+sandbox UIPI blocks synthetic OS input here). MarkerPanel mount is
+typecheck + code-path verified (no headless selection path exists to
+drive a scene selection from CLI).
 Human→agent, cheating, monolith, and filesystem fire tests still pending
 (plan §11). Evidence artifacts stay under `tmp/`.
 
@@ -153,6 +209,13 @@ runner still exits 1 on the pre-existing libuv `fs-event.c` watch
 assertion, see Limitations); `eslint` web 0 errors; source E2E 22/22 and
 NLE E2E 27/27 on the live stack.
 
+Markers-milestone gate at `4ee8ac1`: `npm run check` clean (all
+workspaces); unit suites green (dapi 82/82 incl. 4 marker schema tests,
+cli 15/15, desktop 207 passed / 0 failed — same pre-existing
+`projects.watch.test.ts` worker crash, module graph disjoint from the
+marker changes); `eslint` 0 errors (same 3 pre-existing warnings);
+marker E2E 26/26, NLE E2E 27/27, source E2E 22/22 on the live stack.
+
 ## Limitations
 
 - `apps/desktop` suite: `projects.watch.test.ts` crashes its vitest worker
@@ -164,9 +227,14 @@ NLE E2E 27/27 on the live stack.
   was not possible from this sandbox: synthetic `mouse_event` input is
   silently dropped by UIPI (cursor moves, clicks don't land), there is no
   CDP port on the dev Electron, and no headless selection path exists.
-  The panel was verified live via mount + reactive effect + clean logs
-  instead; the shortcuts are data-table entries over E2E-proven ops.
-  Human fire-test item (§54.19–25) remains for a real keyboard.
+  The monitor panel was verified live via mount + reactive effect + clean
+  logs; the marker flags via canvas screenshots; the shortcuts are
+  data-table entries over E2E-proven ops. The MarkerPanel mount itself
+  (scene selection → panel) is typecheck + code-path verified only.
+  Human fire-test items (§54.18–25) remain for a real keyboard.
+- No panel-focus model exists, so global I/O marks the source monitor even
+  when the timeline has the user's attention; timeline in/out is menu
+  clicks ("Set work area in/out") until focus-sensitive routing exists.
 - Monitor insert/overwrite from the UI default to the active scene at the
   playhead (same destination as canvas/timeline drops); landing inside a
   sequence needs the DAPI `parent` today — there is no destination picker
@@ -183,5 +251,5 @@ NLE E2E 27/27 on the live stack.
 
 ## Final SHA
 
-Pending — goal continues. Interim HEAD: `9421ac8`
-(`fork/diffusion-on-steroids`), source slice complete through plan §5–§6.
+Pending — goal continues. Interim HEAD: `4ee8ac1`
+(`fork/diffusion-on-steroids`), markers slice complete (plan §2–§4, §8–§10).
