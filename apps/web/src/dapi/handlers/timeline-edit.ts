@@ -5,7 +5,7 @@
 import { getParentEntity, Name, Source } from "@diffusionstudio/runtime";
 import { DapiError } from "@diffusionstudio/dapi";
 import { getEditHistory } from "@/engine/history";
-import { clipSpan, extract, lift, rippleTrimIn, rippleTrimOut, roll, siblingsInTime, slide, slip } from "@/engine/nle";
+import { clipSpan, extract, lift, rippleTrimIn, rippleTrimOut, rippleTrimPreviousToPlayhead, roll, siblingsInTime, slide, slip } from "@/engine/nle";
 import { moveEntityTo, trimIn, trimOut } from "@/engine/timing";
 import { resolveNode } from "../lib/nodes";
 
@@ -77,9 +77,13 @@ export const timelineEdit: ToolHandler<"timeline_edit"> = async ({ op, target, f
       };
     }
     case "rippleTrimIn":
-    case "rippleTrimOut": {
+    case "rippleTrimOut":
+    case "rippleTrimPreviousToPlayhead": {
       if (frame === undefined) throw new DapiError("invalid-input", `${op} needs frame (the destination timeline frame).`);
-      const applied = op === "rippleTrimIn" ? rippleTrimIn(world, node, frame) : rippleTrimOut(world, node, frame);
+      let applied: number;
+      if (op === "rippleTrimIn") applied = rippleTrimIn(world, node, frame);
+      else if (op === "rippleTrimOut") applied = rippleTrimOut(world, node, frame);
+      else applied = rippleTrimPreviousToPlayhead(world, node, frame);
       return {
         op,
         target,
