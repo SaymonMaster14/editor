@@ -36,6 +36,7 @@ import { DEFAULT_CLIP_HEIGHT, RULER_HEIGHT } from '@/engine/timeline';
 import { splitAtPlayhead } from '@/engine/split';
 import { useDerived, useEditor, useTimelineIndex } from '@/engine/hooks';
 import { useTimeline } from '@/context/timeline';
+import { getEditHistory } from '@/engine/history';
 import { useLayout } from '@/context/layout';
 import { store } from '@/init';
 import { createStoredSignal } from '@/lib/store';
@@ -59,6 +60,7 @@ const HEIGHT_PRESETS = [
 export function Layers() {
   const world = useWorld();
   const editor = useEditor();
+  const history = () => getEditHistory(world);
   const timeline = useTimeline();
   const index = useTimelineIndex();
   const { timelineMinimized, toggleTimeline, timelineView, toggleTimelineView } = useLayout();
@@ -151,6 +153,30 @@ export function Layers() {
           class="w-full z-10 flex flex-row gap-1 pl-2 pr-3 items-center text-muted-foreground select-none"
           on:dblclick={handleHeaderDoubleClick}
         >
+          <Tooltip placement="top">
+            <TooltipTrigger<typeof Button>
+              as={(triggerProps) => (
+                <Button {...triggerProps} variant="ghost" size="icon" onClick={() => history().undo()} disabled={!history().canUndo()}>
+                  <Icon name="arrow-left" class="size-6" />
+                </Button>
+              )}
+            />
+            <TooltipPortal>
+              <TooltipContent shortcut="Ctrl+Z">Undo</TooltipContent>
+            </TooltipPortal>
+          </Tooltip>
+          <Tooltip placement="top">
+            <TooltipTrigger<typeof Button>
+              as={(triggerProps) => (
+                <Button {...triggerProps} variant="ghost" size="icon" onClick={() => history().redo()} disabled={!history().canRedo()}>
+                  <Icon name="arrow-right" class="size-6" />
+                </Button>
+              )}
+            />
+            <TooltipPortal>
+              <TooltipContent shortcut="Ctrl+Shift+Z">Redo</TooltipContent>
+            </TooltipPortal>
+          </Tooltip>
           <Tooltip placement="top">
             <TooltipTrigger<typeof Button>
               as={(triggerProps) => (

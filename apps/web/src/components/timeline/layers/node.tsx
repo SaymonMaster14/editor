@@ -90,21 +90,21 @@ export function NodeLayer(props: LayerRowProps) {
     if (!parent || !isScene(parent)) return null;
     const rows = getEntityChildren(world, parent);
     const kinds = rows.map((row) => {
+      // A row is audio only when every typed clip in its subtree is audio;
+      // any visual element (or no typed clip at all) makes it a video row.
+      // The row itself is classified first, so a loose top-level audio
+      // clip does not read as video.
       const stack = [row];
       let seen = false;
       let audioOnly = true;
       while (stack.length > 0) {
         const node = stack.pop()!;
-        for (const child of getEntityChildren(world, node)) {
-          if (isSequence(child) || isGroup(child)) {
-            stack.push(child);
-            continue;
-          }
-          const type = findGeometryAsset(world, child)?.type;
-          if (type === undefined) continue;
+        const type = findGeometryAsset(world, node)?.type;
+        if (type !== undefined) {
           seen = true;
           if (type !== 'AUDIO') audioOnly = false;
         }
+        for (const child of getEntityChildren(world, node)) stack.push(child);
       }
       return seen && audioOnly ? 'A' as const : 'V' as const;
     });
@@ -322,8 +322,8 @@ export function NodeLayer(props: LayerRowProps) {
             class="items-center flex gap-0.5 shrink-0 overflow-hidden group-hover:w-auto"
             classList={{
               'hidden': resized() !== null,
-              'w-0': !(muted() || soloed() || hidden()),
-              'w-auto': muted() || soloed() || hidden(),
+              'w-0': !nleView() && !(muted() || soloed() || hidden()),
+              'w-auto': nleView() || muted() || soloed() || hidden(),
             }}
           >
             <Tooltip placement="bottom">
