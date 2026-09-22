@@ -36,6 +36,7 @@ export const timelineEdit: ToolHandler<"timeline_edit"> = async ({ op, target, f
     return { op, summary: `${op} applied`, spans: {} };
   }
   if (op === "split" && !target) {
+    getEditHistory(world).labelStep("Agent — split");
     const tails = splitAtPlayhead(world);
     if (tails.length === 0) throw new DapiError("invalid-input", "nothing under the playhead to split.");
     return { op, summary: `split ${tails.length} clip(s) at the playhead`, spans: spansOf(world, tails) };

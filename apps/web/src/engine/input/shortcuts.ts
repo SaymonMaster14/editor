@@ -527,6 +527,7 @@ const PRESSED_SHORTCUTS: readonly Shortcut[] = [
 	{ keys: ['enter', 'mod', 'alt', '!shift'], action: wrapSelectionInSequence },
 	{ keys: ['enter', 'mod', 'alt', 'shift'], action: unwrapSequenceSelection },
 	{ keys: ['b', 'mod'], action: splitSelectionAtPlayhead },
+	{ keys: ['c', 'mod'], action: copySelection },
 	{ keys: ['v', 'mod'], action: pasteSelection },
 	{ keys: ['x', 'mod'], action: cutSelection },
 	{ keys: ['h', 'mod', 'shift'], action: toggleSelectionHidden },
@@ -587,14 +588,6 @@ const PRESSED_SHORTCUTS: readonly Shortcut[] = [
 	{ keys: ['\\', '!mod'], action: selectParents },
 	{ keys: ['enter', '!mod'], action: selectChildren },
 	{ keys: ['escape'], action: deselect },
-	{ keys: ['arrowleft', '!shift'], action: nudge(-NUDGE, 0) },
-	{ keys: ['arrowright', '!shift'], action: nudge(NUDGE, 0) },
-	{ keys: ['arrowup', '!shift'], action: nudge(0, -NUDGE) },
-	{ keys: ['arrowdown', '!shift'], action: nudge(0, NUDGE) },
-	{ keys: ['arrowleft', 'shift'], action: nudge(-NUDGE_FAST, 0) },
-	{ keys: ['arrowright', 'shift'], action: nudge(NUDGE_FAST, 0) },
-	{ keys: ['arrowup', 'shift'], action: nudge(0, -NUDGE_FAST) },
-	{ keys: ['arrowdown', 'shift'], action: nudge(0, NUDGE_FAST) },
 	{ keys: [' '], action: onSpacePressed },
 ];
 
