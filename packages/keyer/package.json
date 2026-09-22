@@ -1,0 +1,28 @@
+{
+  "name": "@diffusionstudio/keyer",
+  "version": "0.1.0",
+  "description": "Chroma-key analysis: screen estimation, soft alpha mattes, despill, and key-quality verdicts. Pure TypeScript, no DOM, no models — the renderer decodes; this package pulls the key.",
+  "license": "MPL-2.0",
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "check": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "keywords": [
+    "chroma-key",
+    "keying",
+    "matte",
+    "video-analysis"
+  ],
+  "dependencies": {
+    "@diffusionstudio/scene": "*"
+  },
+  "devDependencies": {
+    "typescript": "~5.9.3",
+    "vitest": "^4.0.0"
+  }
+}

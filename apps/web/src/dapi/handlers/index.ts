@@ -23,6 +23,7 @@ import { mediaScenes } from "./media-scenes";
 import { mediaTrack } from "./media-track";
 import { mediaStabilize } from "./media-stabilize";
 import { mediaReframe } from "./media-reframe";
+import { mediaKey } from "./media-key";
 import { audioLoudness } from "./audio-loudness";
 import { audioBeats } from "./audio-beats";
 
@@ -51,6 +52,7 @@ export const handlers: Handlers = {
   media_track: mediaTrack,
   media_stabilize: mediaStabilize,
   media_reframe: mediaReframe,
+  media_key: mediaKey,
   audio_loudness: audioLoudness,
   audio_beats: audioBeats,
 };

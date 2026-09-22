@@ -28,6 +28,7 @@ import { mediaScenes } from "./tools/media-scenes";
 import { mediaTrack } from "./tools/media-track";
 import { mediaStabilize } from "./tools/media-stabilize";
 import { mediaReframe } from "./tools/media-reframe";
+import { mediaKey } from "./tools/media-key";
 import { audioLoudness } from "./tools/audio-loudness";
 import { audioBeats } from "./tools/audio-beats";
 import { fonts } from "./tools/fonts";
@@ -57,6 +58,7 @@ export const catalog = [
   mediaTrack,
   mediaStabilize,
   mediaReframe,
+  mediaKey,
   audioLoudness,
   audioBeats,
   models,

@@ -229,6 +229,22 @@ media
   );
 
 media
+  .command("key")
+  .description(describe("media_key"))
+  .argument("<path>", field("media_key", "path"))
+  .option("--screen <rgb>", field("media_key", "screen"))
+  .option("--tolerance <n>", field("media_key", "tolerance"), numeric)
+  .option("--softness <n>", field("media_key", "softness"), numeric)
+  .action((ref: string, opts: { screen?: string; tolerance?: number; softness?: number }) =>
+    run("media_key", {
+      path: assetPath(ref),
+      ...(opts.screen !== undefined ? { screen: opts.screen.split(",").map(numeric) as [number, number, number] } : {}),
+      ...(opts.tolerance !== undefined ? { tolerance: opts.tolerance } : {}),
+      ...(opts.softness !== undefined ? { softness: opts.softness } : {}),
+    }),
+  );
+
+media
   .command("transcribe")
   .description(describe("media_transcribe"))
   .argument("<path>", field("media_transcribe", "path"))

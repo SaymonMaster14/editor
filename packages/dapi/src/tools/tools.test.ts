@@ -10,6 +10,7 @@ import { exportScene } from "./export";
 import { logs } from "./logs";
 import { mediaFilmstrip } from "./media-filmstrip";
 import { mediaGrab } from "./media-grab";
+import { mediaKey } from "./media-key";
 import { mediaListen } from "./media-listen";
 import { mediaScenes } from "./media-scenes";
 import { mediaTrack } from "./media-track";
@@ -218,5 +219,23 @@ describe("media_reframe", () => {
     expect(issues(input.safeParse({ path: "/c.mp4", aspect: "9:16", smoothing: -1 }))).toHaveProperty("smoothing");
     expect(issues(input.safeParse({ path: "/c.mp4", aspect: "9:16", cuts: ["soon"] }))).toHaveProperty("cuts.0");
     expect(input.safeParse({ path: "/c.mp4", aspect: "1:1", cuts: [1.5], smoothing: 0 }).success).toBe(true);
+  });
+});
+describe("media_key", () => {
+  const input = mediaKey.input;
+
+  it("parses a bare path with keying defaults", () => {
+    const args = input.parse({ path: "/c.mp4" });
+    expect(args.screen).toBeUndefined();
+    expect(args.tolerance).toBeUndefined();
+    expect(args.softness).toBeUndefined();
+  });
+
+  it("rejects bad screens and bad keying options", () => {
+    expect(issues(input.safeParse({ path: "/c.mp4", screen: [0, 300, 0] }))).toHaveProperty("screen.1");
+    expect(issues(input.safeParse({ path: "/c.mp4", screen: [0, 0] }))).toHaveProperty("screen");
+    expect(issues(input.safeParse({ path: "/c.mp4", tolerance: -1 }))).toHaveProperty("tolerance");
+    expect(issues(input.safeParse({ path: "/c.mp4", softness: 0 }))).toHaveProperty("softness");
+    expect(input.safeParse({ path: "/c.mp4", screen: [0, 200, 0], tolerance: 40 }).success).toBe(true);
   });
 });
