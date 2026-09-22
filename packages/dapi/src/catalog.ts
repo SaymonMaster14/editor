@@ -26,6 +26,7 @@ import { mediaWaveform } from "./tools/media-waveform";
 import { mediaListen } from "./tools/media-listen";
 import { mediaScenes } from "./tools/media-scenes";
 import { mediaTrack } from "./tools/media-track";
+import { mediaStabilize } from "./tools/media-stabilize";
 import { audioLoudness } from "./tools/audio-loudness";
 import { audioBeats } from "./tools/audio-beats";
 import { fonts } from "./tools/fonts";
@@ -53,6 +54,7 @@ export const catalog = [
   mediaListen,
   mediaScenes,
   mediaTrack,
+  mediaStabilize,
   audioLoudness,
   audioBeats,
   models,

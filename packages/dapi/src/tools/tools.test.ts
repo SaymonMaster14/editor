@@ -13,6 +13,7 @@ import { mediaGrab } from "./media-grab";
 import { mediaListen } from "./media-listen";
 import { mediaScenes } from "./media-scenes";
 import { mediaTrack } from "./media-track";
+import { mediaStabilize } from "./media-stabilize";
 import { mediaTranscribe } from "./media-transcribe";
 
 /** The messages of a failed parse, keyed by the path they point at. */
@@ -182,5 +183,22 @@ describe("media_track", () => {
     expect(issues(input.safeParse({ path: "/c.mp4", ...box, searchRadius: 0 }))).toHaveProperty("searchRadius");
     expect(issues(input.safeParse({ path: "/c.mp4", ...box, lostThreshold: 2 }))).toHaveProperty("lostThreshold");
     expect(input.safeParse({ path: "/c.mp4", time: 1.5, ...box }).success).toBe(true);
+  });
+});
+
+describe("media_stabilize", () => {
+  const input = mediaStabilize.input;
+
+  it("parses a bare path with analysis defaults", () => {
+    const args = input.parse({ path: "/c.mp4" });
+    expect(args.patches).toBeUndefined();
+    expect(args.smoothing).toBeUndefined();
+  });
+
+  it("rejects bad analysis options", () => {
+    expect(issues(input.safeParse({ path: "/c.mp4", patches: 0 }))).toHaveProperty("patches");
+    expect(issues(input.safeParse({ path: "/c.mp4", patchSize: 2 }))).toHaveProperty("patchSize");
+    expect(issues(input.safeParse({ path: "/c.mp4", smoothing: -1 }))).toHaveProperty("smoothing");
+    expect(input.safeParse({ path: "/c.mp4", patches: 3, smoothing: 0 }).success).toBe(true);
   });
 });

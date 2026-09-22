@@ -21,6 +21,7 @@ import { mediaWaveform } from "./media-waveform";
 import { mediaListen } from "./media-listen";
 import { mediaScenes } from "./media-scenes";
 import { mediaTrack } from "./media-track";
+import { mediaStabilize } from "./media-stabilize";
 import { audioLoudness } from "./audio-loudness";
 import { audioBeats } from "./audio-beats";
 
@@ -47,6 +48,7 @@ export const handlers: Handlers = {
   media_listen: mediaListen,
   media_scenes: mediaScenes,
   media_track: mediaTrack,
+  media_stabilize: mediaStabilize,
   audio_loudness: audioLoudness,
   audio_beats: audioBeats,
 };

@@ -204,6 +204,19 @@ media
   );
 
 media
+  .command("stabilize")
+  .description(describe("media_stabilize"))
+  .argument("<path>", field("media_stabilize", "path"))
+  .option("--patches <n>", field("media_stabilize", "patches"), numeric)
+  .option("--patch-size <px>", field("media_stabilize", "patchSize"), numeric)
+  .option("--search-radius <px>", field("media_stabilize", "searchRadius"), numeric)
+  .option("--smoothing <n>", field("media_stabilize", "smoothing"), numeric)
+  .action(
+    (ref: string, opts: { patches?: number; patchSize?: number; searchRadius?: number; smoothing?: number }) =>
+      run("media_stabilize", { path: assetPath(ref), ...opts }),
+  );
+
+media
   .command("transcribe")
   .description(describe("media_transcribe"))
   .argument("<path>", field("media_transcribe", "path"))
