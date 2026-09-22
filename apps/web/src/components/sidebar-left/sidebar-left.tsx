@@ -3,6 +3,8 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 import { Assets } from "./assets";
+import { EffectsPanel } from "./effects-panel";
+import { TransitionsPanel } from "./transitions-panel";
 import { ChatPanel, sidebarTab } from "@/agent-chat";
 import { useLayout } from "@/context/layout";
 import { useEditorApi } from "@/dapi";
@@ -19,9 +21,15 @@ export function SidebarLeft() {
     <div class="flex flex-col h-full overflow-hidden">
       <ElectronHeader />
       <ProjectHeader />
-      <div classList={{ contents: sidebarTab() === "assets", hidden: sidebarTab() === "chat" }}>
+      <Show when={sidebarTab() === "assets"}>
         <Assets />
-      </div>
+      </Show>
+      <Show when={sidebarTab() === "effects"}>
+        <EffectsPanel />
+      </Show>
+      <Show when={sidebarTab() === "transitions"}>
+        <TransitionsPanel />
+      </Show>
       <Show when={sidebarTab() === "chat"}>
         <ChatPanel />
       </Show>

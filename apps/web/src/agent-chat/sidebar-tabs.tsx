@@ -7,7 +7,9 @@ import { For } from "solid-js";
 import { setSidebarTab, sidebarTab, type SidebarTab } from "./store";
 
 const TABS: { id: SidebarTab; label: string }[] = [
-  { id: "assets", label: "Assets" },
+  { id: "assets", label: "Project" },
+  { id: "effects", label: "Effects" },
+  { id: "transitions", label: "Transitions" },
   { id: "chat", label: "Chat" },
 ];
 

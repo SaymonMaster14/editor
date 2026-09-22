@@ -36,7 +36,7 @@ import type { ProjectInfo } from "@/projects";
 import { attachmentFromPath, attachmentPaths, type Attachment } from "./attachments";
 import { client, hasHost } from "./connection";
 
-export type SidebarTab = "assets" | "chat";
+export type SidebarTab = "assets" | "effects" | "transitions" | "chat";
 
 export type Draft = { text: string; attachments: Attachment[] };
 
