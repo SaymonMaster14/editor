@@ -56,9 +56,35 @@
 11. Fire tests (human NLE, human→agent, cheating, monolith, filesystem).
 12. Packaging + regression + final report/matrices.
 
+## Milestone: canonical NLE ops + timeline_edit (plan §2–§4)
+
+Commits `f100da6` (ops + tool + CLI) and `6e6f4c9` (id-preserving undo),
+pushed to `fork/diffusion-on-steroids`.
+
+- `apps/web/src/engine/nle.ts` (new): canonical lift/extract/rippleTrimIn/
+  rippleTrimOut/roll/slip/slide over `DocumentEditor` + one history gesture
+  each; roll/slide clamp to source handles and report the applied point.
+- `timeline_edit` DAPI tool + handler + `dapi timeline` CLI with
+  spans/removed/shifted readback; removed clips named before removal.
+- Undo of a remove restores the original node id end to end
+  (`CapturedNode.id` → history reinsert → `SourceWriter` honors the
+  requested id when free, temp+rename when the same write cuts the
+  previous holder; `spell()` strips id so copies never claim it).
+- Writer unit tests (`apps/desktop/src/edit.test.ts`): free/taken/
+  same-write-remove id cases, 4/4 with the pre-existing test.
+- E2E `tmp/nle-e2e/proof.mjs`: 27/27 on an isolated live instance
+  (fresh profile, `DIFFUSION_DEV_NO_AUTH=1`, own MCP port) — roll/trim/
+  ripple/extract/undo/redo/slip/slide/multi-extract/lift, source sync,
+  error cases, reopen persistence. Fixture media is a looped 360-frame
+  cut (`street-long.mp4`): the 90-frame original leaves full-length
+  clips with no source handles, which made the first roll assertions
+  unachievable in Computed terms.
+
 ## Fire tests
 
-Pending (see plan). Evidence will land here with artifacts under `tmp/`.
+NLE E2E (agent path over DAPI/CLI): 27/27 green, see milestone above.
+Human-interactive, human→agent, cheating, monolith, and filesystem fire
+tests still pending (plan §11). Evidence artifacts stay under `tmp/`.
 
 ## Performance
 
@@ -73,6 +99,11 @@ flow E2E 16/16 on the live stack, RAFT/DIS ground-truth errors 0.16/0.10px.
 
 ## Limitations
 
+- `apps/desktop` suite: `projects.watch.test.ts` crashes its vitest worker
+  via a libuv `fs-event.c` assertion (also in isolation; its module graph
+  is disjoint from the NLE/writer changes). Pre-existing/environmental;
+  the rest of the suite is 207/207.
+- Redo of an insert mints a fresh id (only remove→undo restores ids).
 - OOM timestamps: user recalled ~02:00; crash was ~04:52 (phase-T commit 04:49).
   No work was lost: tree was clean, only the unstarted flow worker remained.
 - Steroids "documentation" is commit messages + in-code docs (repo convention);
