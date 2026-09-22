@@ -16,7 +16,7 @@ import {
 	CLIP_LABEL_HEIGHT,
 	TRIM_HANDLE_WIDTH,
 } from '../config';
-import { applyClipDrag, applyTrim, beginClipDrag, beginTrim } from '../drag';
+import { applyClipDrag, applyRoll, applyTrim, beginClipDrag, beginTrim } from '../drag';
 import { getClipAsset, getClipFallbackName, getClipStyle } from '../style';
 import { truncateText } from '../text';
 import { framesToPixels, getResolution, getScrollX, getViewport, pixelsToFrames } from '../view';
@@ -158,6 +158,18 @@ function handleTrim(
 
 	const inHandle = pointer.region(left, 0, handle, row.height);
 	const outHandle = pointer.region(left + width - handle, 0, handle, row.height);
+
+	// The rolling edit moves both sides of the cut together: with the roll
+	// tool armed, an edge drag rolls the edit point instead of trimming it.
+	// No abutting cut at the edge means no roll, and the press does nothing.
+	if (world.get(Tool)?.value === ToolType.ROLL) {
+		if (inHandle.hovering || outHandle.hovering || inHandle.dragging || outHandle.dragging) surface.cursor = 'ew-resize';
+		const edge = inHandle.dragging ? 'in' : outHandle.dragging ? 'out' : null;
+		if (edge === null) return;
+		if (!entity.has(TrimDragOrigin)) beginTrim(world, entity);
+		applyRoll(world, surface, entity, edge, resolution);
+		return;
+	}
 
 	// The cursor points into the clip, at the frames the handle would take.
 	if (inHandle.hovering || inHandle.dragging) surface.cursor = 'trim-right';

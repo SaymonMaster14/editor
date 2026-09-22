@@ -549,6 +549,7 @@ const PRESSED_SHORTCUTS: readonly Shortcut[] = [
 	{ keys: ['q', '!mod'], action: rippleTrimPrev },
 	{ keys: ['w', '!mod', '!shift'], action: rippleTrimNext },
 	{ keys: ['c', '!mod'], action: selectTool(ToolType.BLADE) },
+	{ keys: ['n', '!mod'], action: selectTool(ToolType.ROLL) },
 	{ keys: ['arrowleft', '!shift', '!alt'], action: nudge(-NUDGE, 0) },
 	{ keys: ['arrowright', '!shift', '!alt'], action: nudge(NUDGE, 0) },
 	{ keys: ['arrowup', '!shift', '!alt'], action: nudge(0, -NUDGE) },

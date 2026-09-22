@@ -22,8 +22,10 @@ import {
 	Selected,
 	TrimDragOrigin,
 	findAssetDuration,
+	getParentEntity,
 	store,
 } from '@diffusionstudio/runtime';
+import { clipSpan, rollPairAt, siblingsInTime, writeRollPair } from '../nle';
 import { Not, Or } from 'koota';
 
 import { clamp } from '@/utils';
@@ -173,6 +175,34 @@ export function applyTrim(
 	else trimOut(world, entity, frame);
 }
 
+/**
+ * Rolls the edit point held to where the pointer has taken it: the two
+ * sides move together through the canonical clamped write, so a roll drag
+ * is one undo step the way a trim drag is. The pair is resolved live each
+ * frame — the point never leaves the cut mid-drag, so the press-time anchor
+ * plus the pointer offset is always the wanted frame.
+ */
+export function applyRoll(
+	world: World,
+	surface: TimelineSurfaceState,
+	entity: Entity,
+	edge: TrimEdge,
+	resolution: number,
+): void {
+	const origin = entity.get(TrimDragOrigin)!;
+	const offset = pixelsToFrames(draggedPixels(surface), resolution);
+	const wanted = (edge === 'in' ? origin.start : origin.end) + offset;
+
+	const start = clipSpan(entity).start;
+	const parent = getParentEntity(entity);
+	const left = edge === 'out'
+		? entity
+		: parent ? siblingsInTime(parent).find((sibling) => sibling !== entity && clipSpan(sibling).end === start) : undefined;
+	if (!left) return;
+	const pair = rollPairAt(left);
+	if (!pair) return;
+	writeRollPair(world, pair.left, pair.right, pair.point, wanted);
+}
 /**
  * How far the edge can go. Each clip is its own row, so a neighbour is no
  * constraint — only the clip's other edge, and how much source there is left

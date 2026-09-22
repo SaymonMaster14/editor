@@ -171,6 +171,7 @@ export enum ToolType {
   MOVE,
   HAND,
   BLADE,
+  ROLL,
   SCENE,
   RECT,
   TEXT,

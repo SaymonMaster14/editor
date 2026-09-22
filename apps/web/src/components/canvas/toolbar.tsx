@@ -144,6 +144,18 @@ export function Toolbar() {
           </TooltipTrigger>
           <TooltipContent shortcut="C">Razor</TooltipContent>
         </Tooltip>
+        <Tooltip>
+          <TooltipTrigger
+            as={Button}
+            size="icon-square"
+            variant={selectedTool() === ToolType.ROLL ? 'default' : 'ghost'}
+            onClick={() => handleToolChange(ToolType.ROLL)}
+            class={selectedTool() === ToolType.ROLL ? 'text-foreground' : 'text-muted-foreground'}
+          >
+            <Icon name="switch-flip" />
+          </TooltipTrigger>
+          <TooltipContent shortcut="N">Rolling edit</TooltipContent>
+        </Tooltip>
         <Separator
           orientation="vertical"
           class="data-[orientation=vertical]:h-5 rounded-md"

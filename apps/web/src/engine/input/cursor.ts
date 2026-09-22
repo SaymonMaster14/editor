@@ -85,6 +85,7 @@ const TOOL_CURSORS: Record<ToolType, { idle: CursorType; pressed?: CursorType }>
 	[ToolType.MOVE]: { idle: 'default' },
 	[ToolType.HAND]: { idle: 'grab', pressed: 'grabbing' },
 	[ToolType.BLADE]: { idle: 'cross' },
+	[ToolType.ROLL]: { idle: 'ew-resize' },
 	[ToolType.SCENE]: { idle: 'cross' },
 	[ToolType.RECT]: { idle: 'cross' },
 	[ToolType.TEXT]: { idle: 'cross' },

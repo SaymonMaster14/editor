@@ -219,24 +219,46 @@ export function rippleTrimPreviousToPlayhead(world: World, entity: Entity, frame
  * both of them say.
  */
 export function roll(world: World, left: Entity, frame: number): { left: Entity; right: Entity; applied: number } | null {
+	const pair = rollPairAt(left);
+	if (!pair) return null;
+	if (frame === pair.point) return { left: pair.left, right: pair.right, applied: frame };
+	const history = getEditHistory(world);
+	history.beginGesture();
+	try {
+		const applied = writeRollPair(world, pair.left, pair.right, pair.point, frame);
+		return { left: pair.left, right: pair.right, applied };
+	} finally {
+		history.endGesture();
+	}
+}
+
+/**
+ * The cut at the end of `left`: the abutting pair and the point, or null
+ * when the end is not a cut between two clips (a roll needs two touching).
+ */
+export function rollPairAt(left: Entity): { left: Entity; right: Entity; point: number } | null {
 	const parent = getParentEntity(left);
 	if (!parent) return null;
 	const point = clipSpan(left).end;
 	const right = siblingsInTime(parent).find((sibling) => sibling !== left && clipSpan(sibling).start === point);
 	if (!right) return null;
+	return { left, right, point };
+}
+
+/**
+ * Writes the pair to `frame`, clamped by source handles — the roll itself
+ * without gesture bracketing. One-shot callers (the `roll` op above) bracket
+ * it in a gesture; per-frame drag callers write through the drag's own
+ * coalescing step instead, so a roll drag stays one undo step.
+ */
+export function writeRollPair(world: World, left: Entity, right: Entity, point: number, frame: number): number {
 	let applied = frame;
 	if (applied > point) applied = Math.min(applied, point + sourceTailroom(world, left));
 	else if (applied < point) applied = Math.max(applied, point - sourceHeadroom(right));
-	if (applied === point) return { left, right, applied };
-	const history = getEditHistory(world);
-	history.beginGesture();
-	try {
-		trimOut(world, left, applied);
-		trimIn(world, right, applied);
-		return { left, right, applied };
-	} finally {
-		history.endGesture();
-	}
+	if (applied === point) return applied;
+	trimOut(world, left, applied);
+	trimIn(world, right, applied);
+	return applied;
 }
 
 /**
