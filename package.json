@@ -20,6 +20,7 @@
     "postinstall": "patch-package",
     "lint": "npm run lint --workspaces --if-present",
     "check": "npm run check --workspaces --if-present",
+    "check:architecture": "node scripts/check-architecture.mjs",
     "test": "npm run test --workspaces --if-present"
   },
   "devDependencies": {

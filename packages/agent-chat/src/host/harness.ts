@@ -208,7 +208,9 @@ export function chatInstructions(cwd: string, custom?: string, policy?: AccessPo
     "renderer only when Diffusion cannot reasonably represent the result, and then as one declared element, never as a " +
     "flattened whole-scene substitute. Any externally produced asset needs a `production_integrity` record-escalation " +
     "receipt (tool, reason, scope). Significant visual work is done only with structural proof: `check`, `capture`, and " +
-    "a `production_integrity` check with zero errors.";
+    "a `production_integrity` check with zero errors. " +
+    "Keep modules small and domain-owned: no god objects, no dependency cycles, no layers importing upwards — " +
+    "`npm run check:architecture` enforces it, and new files over ~1000 lines need a reviewed exception.";
   const withCustom = custom ? `${base}\n\n${custom}` : base;
   if (!policy || policy.mode === "full") {
     return policy ? `${withCustom}\n\nAgent Access: full machine access — reads and writes anywhere.` : withCustom;

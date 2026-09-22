@@ -1,0 +1,27 @@
+[
+  {
+    "files": ["packages/reconciler/src/document.ts"],
+    "rule": "size",
+    "reason": "Single cohesive document model: authored + runtime trees plus the element/animation/effect/transition catalogs (2030 lines, pre-existing). Splitting the catalogs from the tree mapping is a dedicated refactor, not drive-by work."
+  },
+  {
+    "files": ["apps/desktop/src/projects.ts"],
+    "rule": "size",
+    "reason": "Desktop project lifecycle in one module: scan, resolve, scaffold, CRUD, compile, manifest/config IO (1255 lines, pre-existing). A lifecycle-vs-IO-vs-compile split is future work."
+  },
+  {
+    "files": ["apps/desktop/src/edit.ts"],
+    "rule": "size",
+    "reason": "Single-purpose source-edit applier: ts-morph JSX rewriting behind 3 exports (1252 lines, pre-existing). Large by case coverage, one responsibility."
+  },
+  {
+    "files": ["apps/web/src/components/genai/prompt-input.tsx"],
+    "rule": "size",
+    "reason": "Chat prompt-input UI component (1108 lines, pre-existing Steroids-era). Decomposition into subcomponents is future work."
+  },
+  {
+    "files": ["apps/web/src/engine/editor.ts"],
+    "rule": "size",
+    "reason": "Canonical DocumentEditor: single-domain document-mutation vocabulary (props, text, selection, insert, remove, reparent, clipboard) plus source reporting (~30 methods, no cross-domain sprawl). The Human-NLE goal extends it in place deliberately; split the command families if it grows further."
+  }
+]
