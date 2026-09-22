@@ -1,0 +1,28 @@
+{
+  "name": "@diffusionstudio/effects",
+  "version": "0.1.0",
+  "description": "Procedural CPU effects over decoded RGB frames: a serializable effect stack (grain, vignette, RGB split, pixelation, scanlines, camera shake, posterize) with validated parameters, seeded determinism, and time-varying motion. Pure TypeScript, no DOM — the renderer decodes; this package transforms pixels.",
+  "license": "MPL-2.0",
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "check": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "keywords": [
+    "effects",
+    "vfx",
+    "procedural",
+    "video"
+  ],
+  "dependencies": {
+    "@diffusionstudio/scene": "*"
+  },
+  "devDependencies": {
+    "typescript": "~5.9.3",
+    "vitest": "^4.0.0"
+  }
+}

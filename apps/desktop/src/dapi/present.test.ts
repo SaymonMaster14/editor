@@ -32,6 +32,22 @@ describe("present", () => {
     rmSync(join(path, ".."), { recursive: true, force: true });
   });
 
+  it("writes effect sheets by timecode and keeps path, frames, and cached next to them", async () => {
+    const out = join(dir, "effects");
+    const presented = await present(
+      "media_effects",
+      { path: "/c.mp4", output: out },
+      { path: "/c.mp4", images: [{ timecode: "0f-2s", png: png(9) }], frames: 3, cached: false },
+    );
+    expect(presented.output).toEqual({
+      path: "/c.mp4",
+      images: [{ timecode: "0f-2s", path: join(out, "0f-2s.png") }],
+      frames: 3,
+      cached: false,
+    });
+    expect(readFileSync(join(out, "0f-2s.png"))).toEqual(Buffer.from(png(9)));
+  });
+
   it("keeps a preview's other fields next to the path", async () => {
     const file = join(dir, "wave.png");
     const presented = await present("media_waveform", { path: "/c.mp4", output: file }, { png: png(4), silences: [{ start: 0, end: 1 }] });

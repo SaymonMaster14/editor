@@ -14,6 +14,7 @@ import { voices } from "./voices";
 import { whoami } from "./whoami";
 import { screenshot } from "./screenshot";
 import { mediaProbe } from "./media-probe";
+import { mediaEffects } from "./media-effects";
 import { mediaGrab } from "./media-grab";
 import { mediaTranscribe } from "./media-transcribe";
 import { mediaFilmstrip } from "./media-filmstrip";
@@ -45,6 +46,7 @@ export const handlers: Handlers = {
   whoami,
   screenshot,
   media_probe: mediaProbe,
+  media_effects: mediaEffects,
   media_grab: mediaGrab,
   media_transcribe: mediaTranscribe,
   media_filmstrip: mediaFilmstrip,

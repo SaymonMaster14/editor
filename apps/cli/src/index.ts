@@ -5,7 +5,7 @@
 
 import { existsSync, readFileSync } from "node:fs";
 import { isAbsolute, resolve } from "node:path";
-import { Command } from "commander";
+import { Command, InvalidArgumentError } from "commander";
 import { z } from "zod";
 import { version } from "../../../package.json";
 import { MCP_URL, toolByName } from "@diffusionstudio/dapi";
@@ -43,6 +43,26 @@ async function run<N extends ToolName>(name: N, input: ToolInput<N>): Promise<vo
 // Numbers are converted so the schema can check them as numbers; an empty or
 // non-numeric string becomes NaN, which the schema rejects with its own message.
 const numeric = (value: string): number => (value.trim() === "" ? NaN : Number(value));
+
+/**
+ * One --effect spec: `grain`, or `kind:param=value,...` — e.g.
+ * `shake:amplitude=6,frequency=8`. Non-numeric values become NaN so the
+ * tool schema rejects them with its own message; malformed specs fail here.
+ */
+function effectSpec(value: string): { kind: string; params?: Record<string, number> } {
+  const [kind, rest] = value.split(/:(.*)/s) as [string, string | undefined];
+  if (!kind || kind.trim() === "") throw new InvalidArgumentError(`expected kind or kind:param=value,... (got "${value}")`);
+  if (rest === undefined) return { kind };
+  const params: Record<string, number> = {};
+  for (const pair of rest.split(",")) {
+    const [key, raw] = pair.split("=");
+    if (!key || key.trim() === "" || raw === undefined) {
+      throw new InvalidArgumentError(`expected kind:param=value,... (got "${value}")`);
+    }
+    params[key] = numeric(raw);
+  }
+  return { kind, params };
+}
 
 /**
  * A local file (or frames folder) that exists is sent as its absolute path;
@@ -311,6 +331,32 @@ media
   .action((ref: string, opts: Omit<ToolInput<"media_grab">, "path">) =>
     run("media_grab", { path: assetPath(ref), ...opts, output: opts.output && resolve(opts.output) }),
   );
+
+media
+  .command("effects")
+  .alias("fx")
+  .description(describe("media_effects"))
+  .argument("<path>", field("media_effects", "path"))
+  .option("--effect <spec>", `${field("media_effects", "effects")} Repeat for a stack: --effect grain:amount=12 --effect vignette:strength=0.5`, (value: string, acc: Array<ReturnType<typeof effectSpec>>) => acc.concat([effectSpec(value)]), [] as Array<ReturnType<typeof effectSpec>>)
+  .option("-t, --times <time...>", field("media_effects", "times"))
+  .option("-c, --count <n>", field("media_effects", "count"), numeric)
+  .option("-s, --start <time>", field("media_effects", "start"))
+  .option("-e, --end <time>", field("media_effects", "end"))
+  .option("-q, --quality <preset>", field("media_effects", "quality"))
+  .option("-S, --separate", field("media_effects", "separate"))
+  .option("--per-sheet <n>", field("media_effects", "perSheet"), numeric)
+  .option("-o, --output <dir>", field("media_effects", "output"))
+  .action((ref: string, opts: Omit<ToolInput<"media_effects">, "path" | "effects"> & { effect?: Array<{ kind: string; params?: Record<string, number> }> }) => {
+    const { effect, ...rest } = opts;
+    // Kinds stay strings here; run() checks them against the tool schema.
+    const effects = (effect ?? []) as ToolInput<"media_effects">["effects"];
+    return run("media_effects", {
+      path: assetPath(ref),
+      ...rest,
+      effects,
+      output: rest.output && resolve(rest.output),
+    });
+  });
 
 media
   .command("filmstrip")

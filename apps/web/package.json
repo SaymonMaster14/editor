@@ -19,6 +19,7 @@
     "@diffusionstudio/assets": "*",
     "@diffusionstudio/audio": "*",
     "@diffusionstudio/dapi": "*",
+    "@diffusionstudio/effects": "*",
     "@diffusionstudio/encoder": "*",
     "@diffusionstudio/jsx": "*",
     "@diffusionstudio/koota-solid": "*",

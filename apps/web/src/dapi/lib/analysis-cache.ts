@@ -11,6 +11,13 @@ import { MemoryArtifactStore, hashBlobSampled, hashParamsAsync } from "@diffusio
 // the disk ArtifactStore stays the durable backend for node workers.
 const store = new MemoryArtifactStore();
 
+/**
+ * The image-payload store: sheet PNGs run to megabytes, so this holds far
+ * fewer entries than the JSON-metrics store above (~tens of MB worst case
+ * instead of hundreds). Pass it as `cache` for image-producing tools.
+ */
+export const mediaStore = new MemoryArtifactStore({ maxEntries: 20 });
+
 export type CachedAnalysis<T> = {
   result: T;
   /** True when the result came from the cache and `run` never executed. */
@@ -27,6 +34,8 @@ export async function analyzeCached<T>(options: {
   /** The logical parameters the result depends on; key order is ignored. */
   params: unknown;
   duration?: number;
+  /** Override the store: image tools pass `mediaStore`. Default: the shared JSON store. */
+  cache?: MemoryArtifactStore;
   /** The expensive work: decode plus analysis. Skipped on a cache hit. */
   run: () => Promise<T>;
 }): Promise<CachedAnalysis<T>> {
@@ -39,12 +48,13 @@ export async function analyzeCached<T>(options: {
     parametersHash,
     ...(options.duration !== undefined ? { duration: options.duration } : {}),
   };
-  const hit = await store.lookup<T>(spec);
+  const cache = options.cache ?? store;
+  const hit = await cache.lookup<T>(spec);
   if (hit) return { result: hit.data, cached: true };
   // Failures are not cached: a failed decode or analysis retries on the
   // next call instead of poisoning the slot.
   const result = await options.run();
-  await store.create(spec, result);
+  await cache.create(spec, result);
   return { result, cached: false };
 }
 

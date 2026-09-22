@@ -27,6 +27,8 @@ export async function present(name: ToolName, args: unknown, result: unknown): P
       return presentQaSweep(result as ToolResult<"qa_sweep">, (args as ToolArgs<"qa_sweep">).output);
     case "media_grab":
       return presentImages(result as ToolResult<"media_grab">, (args as ToolArgs<"media_grab">).output, "grab");
+    case "media_effects":
+      return presentEffects(result as ToolResult<"media_effects">, (args as ToolArgs<"media_effects">).output);
     case "media_filmstrip":
       return presentPreview(result as ToolResult<"media_filmstrip">, (args as ToolArgs<"media_filmstrip">).output, "filmstrip");
     case "media_waveform":
@@ -119,6 +121,30 @@ async function singleFilePath(output: string | undefined, name: string): Promise
   if (existing?.isDirectory()) return join(output, name);
   await mkdir(dirname(output), { recursive: true });
   return output;
+}
+
+/**
+ * Effect sheets land like grabs — one PNG per sheet by timecode — plus
+ * the render's path, frame count, and whether the cache served it.
+ */
+async function presentEffects(result: ToolResult<"media_effects">, output: string | undefined): Promise<Presented> {
+  const dir = output ?? (await mkdtemp(join(tmpdir(), "dapi-effects-")));
+  await mkdir(dir, { recursive: true });
+  const written: WrittenImage[] = [];
+  const refs: ToolOutput<"media_effects">["images"] = [];
+  for (const { timecode, png } of result.images) {
+    const path = join(dir, `${timecode}.png`);
+    await writeFile(path, png);
+    written.push({ path, png });
+    refs.push({ timecode, path });
+  }
+  const presented: ToolOutput<"media_effects"> = {
+    path: result.path,
+    images: refs,
+    frames: result.frames,
+    cached: result.cached,
+  };
+  return { output: presented, images: written };
 }
 
 async function presentPreview(

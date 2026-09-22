@@ -19,6 +19,7 @@ import { mediaTrack } from "./media-track";
 import { mediaStabilize } from "./media-stabilize";
 import { mediaReframe } from "./media-reframe";
 import { mediaTranscribe } from "./media-transcribe";
+import { mediaEffects } from "./media-effects";
 
 /** The messages of a failed parse, keyed by the path they point at. */
 function issues(result: { success: boolean; error?: { issues: Array<{ path: PropertyKey[]; message: string }> } }) {
@@ -70,6 +71,37 @@ describe("media_grab", () => {
     expect(issues(input.safeParse({ path: "/c.mp4", separate: true, perSheet: 4 }))).toHaveProperty("perSheet");
     expect(issues(input.safeParse({ path: "/c.mp4", perSheet: 13 }))).toHaveProperty("perSheet");
     expect(input.safeParse({ path: "/c.mp4", perSheet: 12 }).success).toBe(true);
+  });
+});
+
+describe("media_effects", () => {
+  const input = mediaEffects.input;
+  const stack = [{ kind: "grain" as const, params: { amount: 12 } }, { kind: "vignette" as const }];
+
+  it("parses a stack and leaves params optional", () => {
+    const args = input.parse({ path: "/clip.mp4", effects: stack, count: 4 });
+    expect(args.effects).toEqual(stack);
+    expect(args.effects[1]).not.toHaveProperty("params");
+  });
+
+  it("rejects an empty stack, unknown kinds, and deep stacks", () => {
+    expect(issues(input.safeParse({ path: "/c.mp4", effects: [] }))).toHaveProperty("effects");
+    expect(issues(input.safeParse({ path: "/c.mp4", effects: [{ kind: "bloom" }] }))).toHaveProperty("effects.0.kind");
+    const deep = Array.from({ length: 9 }, () => ({ kind: "grain" as const }));
+    expect(issues(input.safeParse({ path: "/c.mp4", effects: deep }))).toHaveProperty("effects");
+  });
+
+  it("rejects non-numeric params", () => {
+    const found = issues(input.safeParse({ path: "/c.mp4", effects: [{ kind: "grain", params: { amount: "lots" } }] }));
+    expect(found).toHaveProperty("effects.0.params.amount");
+  });
+
+  it("shares the sampling rules with media_grab, capped at 30", () => {
+    expect(issues(input.safeParse({ path: "/c.mp4", effects: stack, times: [1], count: 3 }))).toHaveProperty("count");
+    expect(issues(input.safeParse({ path: "/c.mp4", effects: stack, start: 1 }))).toHaveProperty("start");
+    expect(issues(input.safeParse({ path: "/c.mp4", effects: stack, count: 31 })).count).toMatch(/30-frame cap/);
+    expect(input.safeParse({ path: "/c.mp4", effects: stack, count: 30 }).success).toBe(true);
+    expect(issues(input.safeParse({ path: "/c.mp4", effects: stack, separate: true, perSheet: 4 }))).toHaveProperty("perSheet");
   });
 });
 
