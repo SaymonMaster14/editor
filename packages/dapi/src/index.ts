@@ -24,6 +24,9 @@ export { LoudnessMeasurement, BeatGridMeasurement, finiteDb } from "./audio";
 export { SEGMENT_ENGINE, SEGMENT_ENGINE_VERSION, SegmentDetection, SegmentDetectionRef } from "./segment";
 export type { SegmentWorkerDetection, SegmentWorkerResult } from "./segment";
 
+export { DEPTH_ENGINE, DEPTH_ENGINE_VERSION } from "./depth";
+export type { DepthWorkerResult } from "./depth";
+
 export { INLINE_MAX_IMAGES, INLINE_MAX_BYTES, qaDelivery, selectSweepPositions, framePixelStats, detectLayoutIssues } from "./qa";
 
 export { MCP_HOST, MCP_PORT, MCP_PATH, MCP_URL } from "./mcp";
@@ -33,6 +36,7 @@ export { DAPI_WIRE } from "./ipc";
 export type { DapiCall, DapiCancel, DapiReply } from "./ipc";
 export { FRAME_CAP } from "./tools/media-grab";
 export { SEGMENT_MAX_WIDTH } from "./tools/media-segment";
+export { DEPTH_MAX_WIDTH } from "./tools/media-depth";
 export { ISSUE_LOG_TAIL } from "./tools/report";
 export { LOG_TAIL, LOG_MESSAGE_MAX } from "./tools/logs";
 export { FONT_LIMIT } from "./tools/fonts";
@@ -148,6 +152,9 @@ export type MediaScopesResult = ToolResult<"media_scopes">;
 export type MediaSegmentRequest = ToolArgs<"media_segment">;
 export type MediaSegmentResult = ToolResult<"media_segment">;
 export type MediaSegmentOutput = ToolOutput<"media_segment">;
+export type MediaDepthRequest = ToolArgs<"media_depth">;
+export type MediaDepthResult = ToolResult<"media_depth">;
+export type MediaDepthOutput = ToolOutput<"media_depth">;
 export type AudioLoudnessRequest = ToolArgs<"audio_loudness">;
 export type AudioLoudnessResult = ToolResult<"audio_loudness">;
 export type AudioBeatsRequest = ToolArgs<"audio_beats">;

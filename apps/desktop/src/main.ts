@@ -23,6 +23,7 @@ import { chromeOptions } from "./window-chrome";
 import { mainBridge } from "./main-manager";
 import { MAIN_CHANNELS } from "./main-channels";
 import { resolvePython, segmentPaths, SegmentWorker } from "./segment-worker";
+import { DEPTH_IMPORTS, depthPaths, DepthWorker, resolveDepthPython } from "./depth-worker";
 import {
   compileProject,
   createProject,
@@ -147,6 +148,36 @@ function createSegmentWorker(): SegmentWorker {
     userData: app.getPath("userData"),
   });
   return new SegmentWorker({ python, scriptPath, modelsDir, log: (message) => console.error(message) });
+}
+
+// The depth worker: same one-persistent-child policy as segmentation. Both
+// models stay resident once used (~50 MB + ~400 MB VRAM), well inside the
+// 8 GB budget; both unload on quit.
+let depthWorker: DepthWorker | null = null;
+
+type DepthRunRequest = MainRequestMap[typeof MAIN_CHANNELS.DEPTH_RUN]["request"];
+
+async function depthRun(request: DepthRunRequest) {
+  depthWorker ??= createDepthWorker();
+  return depthWorker.depth(request.png);
+}
+
+function createDepthWorker(): DepthWorker {
+  const python = resolveDepthPython();
+  if (!python) {
+    throw new Error(
+      `Depth needs a Python 3 with ${DEPTH_IMPORTS.join(", ")} installed; none was found. ` +
+        `Run \`python -m pip install ${DEPTH_IMPORTS.join(" ")}\` in the interpreter you want the app to use, and retry. ` +
+        "Set DIFFUSION_STUDIO_PYTHON to point at a specific interpreter.",
+    );
+  }
+  const { scriptPath, modelsDir } = depthPaths({
+    isPackaged: app.isPackaged,
+    appPath: app.getAppPath(),
+    resourcesPath: process.resourcesPath,
+    userData: app.getPath("userData"),
+  });
+  return new DepthWorker({ python, scriptPath, modelsDir, log: (message) => console.error(message) });
 }
 
 // The docs the MCP instructions point agents at: staged into the bundle by
@@ -330,6 +361,7 @@ if (app.requestSingleInstanceLock()) {
   mainBridge.handle(MAIN_CHANNELS.ASSETS_SEARCH, (request) => searchInternetAssets(request));
   mainBridge.handle(MAIN_CHANNELS.ASSETS_DOWNLOAD, (request) => downloadInternetAsset(request));
   mainBridge.handle(MAIN_CHANNELS.SEGMENT_RUN, (request) => segmentRun(request));
+  mainBridge.handle(MAIN_CHANNELS.DEPTH_RUN, (request) => depthRun(request));
   mainBridge.handle(MAIN_CHANNELS.PROJECTS_PICK_ROOT, () => pickRoot(mainWindow));
   mainBridge.handle(MAIN_CHANNELS.PROJECTS_PICK_FOLDER, () => pickFolder(mainWindow));
   mainBridge.handle(MAIN_CHANNELS.PROJECTS_DEFAULT_ROOT, () => defaultRoot(mainWindow));
@@ -459,6 +491,8 @@ if (app.requestSingleInstanceLock()) {
     dapi.stop();
     void segmentWorker?.stop();
     segmentWorker = null;
+    void depthWorker?.stop();
+    depthWorker = null;
   });
 
   app.on("window-all-closed", () => {

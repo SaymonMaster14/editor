@@ -113,7 +113,10 @@ class SegmentWorker:
             blob = base64.b64decode(raw)
         except Exception as exc:
             return fail(request_id, f"image_b64 is not valid base64: {exc}")
-        image = cv2.imdecode(np.frombuffer(blob, np.uint8), cv2.IMREAD_COLOR)
+        try:
+            image = cv2.imdecode(np.frombuffer(blob, np.uint8), cv2.IMREAD_COLOR)
+        except Exception:
+            image = None
         if image is None:
             return fail(request_id, "image_b64 did not decode to an image")
         orig_h, orig_w = image.shape[:2]

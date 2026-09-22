@@ -9,7 +9,7 @@
 //
 // Tool calls from the MCP server use their own wire (DAPI_WIRE in
 // @diffusionstudio/dapi), in the other direction: main asks, the renderer answers.
-import type { LogEntry, ScreenshotResult, SegmentWorkerResult } from "@diffusionstudio/dapi";
+import type { DepthWorkerResult, LogEntry, ScreenshotResult, SegmentWorkerResult } from "@diffusionstudio/dapi";
 import type { SourceEdit, WriteResult } from "./edit-types";
 import type { AgentId } from "./mcp-config";
 import type {
@@ -79,6 +79,7 @@ export const MAIN_CHANNELS = {
   ASSETS_SEARCH: "assets:search",
   ASSETS_DOWNLOAD: "assets:download",
   SEGMENT_RUN: "segment:run",
+  DEPTH_RUN: "depth:run",
 
   // Main→Renderer events
   AUTH_CALLBACK: "auth:callback",
@@ -350,6 +351,12 @@ export type MainRequestMap = {
   [MAIN_CHANNELS.SEGMENT_RUN]: {
     request: { png: Uint8Array; classes?: string[]; conf?: number };
     response: SegmentWorkerResult;
+  };
+  // One frame to the depth worker: same shape as segmentation, minus the
+  // prompt — the 16-bit depth map comes back as PNG bytes.
+  [MAIN_CHANNELS.DEPTH_RUN]: {
+    request: { png: Uint8Array };
+    response: DepthWorkerResult;
   };
 };
 

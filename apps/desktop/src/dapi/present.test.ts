@@ -158,6 +158,45 @@ describe("present", () => {
     expect(presented.images).toEqual([{ path: join(out, "overlay.png"), png: png(13) }]);
   });
 
+  it("writes a depth map plus its grayscale preview", async () => {
+    const out = join(dir, "depth");
+    const presented = await present(
+      "media_depth",
+      { path: "/c.mp4", output: out },
+      {
+        path: "/c.mp4",
+        time: 2,
+        width: 8,
+        height: 4,
+        engine: "depth-anything-v2-small",
+        device: "cuda:0",
+        ms: 540,
+        dmin: 0.13,
+        dmax: 8.25,
+        depth: png(21),
+        preview: png(22),
+        cached: false,
+      },
+    );
+    expect(presented.output).toEqual({
+      path: "/c.mp4",
+      time: 2,
+      width: 8,
+      height: 4,
+      engine: "depth-anything-v2-small",
+      device: "cuda:0",
+      ms: 540,
+      dmin: 0.13,
+      dmax: 8.25,
+      depth: join(out, "depth.png"),
+      preview: join(out, "preview.png"),
+      cached: false,
+    });
+    expect(readFileSync(join(out, "depth.png"))).toEqual(Buffer.from(png(21)));
+    expect(readFileSync(join(out, "preview.png"))).toEqual(Buffer.from(png(22)));
+    expect(presented.images).toEqual([{ path: join(out, "preview.png"), png: png(22) }]);
+  });
+
   it("passes other results through untouched", async () => {
     expect(await present("check", { id: "x" }, { stats: {}, issues: [] })).toEqual({ output: { stats: {}, issues: [] }, images: [] });
   });

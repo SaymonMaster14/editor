@@ -372,6 +372,16 @@ media
   );
 
 media
+  .command("depth")
+  .description(describe("media_depth"))
+  .argument("<path>", field("media_depth", "path"))
+  .option("-t, --time <s>", field("media_depth", "time"), numeric)
+  .option("-o, --output <dir>", field("media_depth", "output"))
+  .action((ref: string, opts: Omit<ToolInput<"media_depth">, "path">) =>
+    run("media_depth", { path: assetPath(ref), ...opts, output: opts.output && resolve(opts.output) }),
+  );
+
+media
   .command("filmstrip")
   .alias("film")
   .description(describe("media_filmstrip"))

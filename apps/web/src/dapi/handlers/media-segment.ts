@@ -2,7 +2,6 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-import { ALL_FORMATS, BlobSource, CanvasSink, Input } from "mediabunny";
 import { MAIN_CHANNELS } from "@desktop/main-channels";
 import { encodePng } from "@diffusionstudio/encoder";
 import { getAssetFile } from "@diffusionstudio/runtime";
@@ -10,6 +9,7 @@ import { DapiError, SEGMENT_ENGINE, SEGMENT_ENGINE_VERSION, SEGMENT_MAX_WIDTH } 
 import { mainBridge } from "@/lib/ipc";
 import { analyzeCached, mediaStore } from "../lib/analysis-cache";
 import { requireAssetType, resolveAsset } from "../lib/assets";
+import { decodeCappedFrame } from "../lib/capped-frame";
 
 import type { SegmentWorkerResult } from "@diffusionstudio/dapi";
 import type { ToolHandler } from "../handler";
@@ -42,7 +42,7 @@ export const mediaSegment: ToolHandler<"media_segment"> = async ({ path, time, c
     ...(duration !== undefined ? { duration } : {}),
     cache: mediaStore,
     run: async () => {
-      const frame = await decodeFrame(asset.type, blob, at);
+      const frame = await decodeCappedFrame(asset.type, blob, at, SEGMENT_MAX_WIDTH);
       let seg: SegmentWorkerResult;
       try {
         seg = await mainBridge.call(MAIN_CHANNELS.SEGMENT_RUN, {
@@ -69,52 +69,6 @@ export const mediaSegment: ToolHandler<"media_segment"> = async ({ path, time, c
   });
   return { ...result, cached };
 };
-
-/** The analyzed frame: decoded pixels, its PNG for the worker, and its canvas for the overlay. */
-async function decodeFrame(
-  type: string,
-  blob: Blob,
-  at: number,
-): Promise<{ canvas: HTMLCanvasElement | OffscreenCanvas; png: Uint8Array }> {
-  if (type !== "VIDEO") {
-    const bitmap = await createImageBitmap(blob);
-    try {
-      const canvas = fitCanvas(bitmap.width, bitmap.height);
-      canvas.getContext("2d")!.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
-      return { canvas, png: await encodePng(canvas) };
-    } finally {
-      bitmap.close();
-    }
-  }
-  const input = new Input({ formats: ALL_FORMATS, source: new BlobSource(blob) });
-  try {
-    const track = await input.getPrimaryVideoTrack();
-    if (!track) throw new DapiError("wrong-kind", "The asset has no video track.");
-    const firstTimestamp = (await track.getFirstTimestamp()) ?? 0;
-    const displayWidth = await track.getDisplayWidth();
-    const sink = new CanvasSink(track, displayWidth > SEGMENT_MAX_WIDTH ? { width: SEGMENT_MAX_WIDTH } : undefined);
-    for await (const wrapped of sink.canvasesAtTimestamps([firstTimestamp + at])) {
-      if (!wrapped) throw new DapiError("not-found", `No frame found at ${at}s.`);
-      return { canvas: wrapped.canvas, png: await encodePng(wrapped.canvas) };
-    }
-    throw new DapiError("not-found", `No frame found at ${at}s.`);
-  } finally {
-    input.dispose();
-  }
-}
-
-/** A canvas at the source size, or downscaled to the width cap (aspect kept). */
-function fitCanvas(width: number, height: number): HTMLCanvasElement {
-  const canvas = document.createElement("canvas");
-  if (width > SEGMENT_MAX_WIDTH) {
-    canvas.width = SEGMENT_MAX_WIDTH;
-    canvas.height = Math.max(1, Math.round((height * SEGMENT_MAX_WIDTH) / width));
-  } else {
-    canvas.width = width;
-    canvas.height = height;
-  }
-  return canvas;
-}
 
 /**
  * The frame with every mask tinted over it: each mask PNG is decoded back

@@ -2,78 +2,30 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-import { spawn, spawnSync } from "node:child_process";
 import { Buffer } from "node:buffer";
-import { mkdir } from "node:fs/promises";
-import { join } from "node:path";
+import { ModelWorker, resolveWorkerPython, workerPaths } from "./model-worker";
 
-import type { ChildProcess } from "node:child_process";
+import type { PythonProbe } from "./model-worker";
+import type { WorkerPathsInput } from "./model-worker";
+import type { ModelWorkerDeps } from "./model-worker";
 import type { SegmentWorkerDetection, SegmentWorkerResult } from "@diffusionstudio/dapi";
 
 /**
- * The main-process side of the segmentation worker: a persistent
- * `workers/segment.py` child speaking NDJSON over stdio. One worker per
- * app, calls serialized — the GPU holds a single model and concurrent
- * segment calls would just contend for it. Idle it keeps the model
- * resident (fork cost beats VRAM thrift at YOLO11n's ~50 MB); `stop()`
- * on quit unloads it.
+ * The segmentation worker: a ModelWorker speaking workers/segment.py's
+ * protocol (info/segment/shutdown over YOLO11n-seg). The transport —
+ * spawn, queue, restart, stop — lives in model-worker; this file is the
+ * worker's imports, paths, response parsing, and error hints.
  */
 
-export type PythonProbe = (command: string, args: string[]) => boolean;
+/** The interpreter must import all of these for segmentation to run. */
+export const SEGMENT_IMPORTS = ["ultralytics", "cv2", "torch"];
 
-/** The worker's imports: an interpreter counts only when it runs them. */
-const WORKER_IMPORTS = "import ultralytics, cv2, torch";
-
-const defaultProbe: PythonProbe = (command, args) => {
-  try {
-    const probed = spawnSync(command, [...args, "-c", WORKER_IMPORTS], { stdio: "ignore", windowsHide: true });
-    return probed.status === 0;
-  } catch {
-    return false;
-  }
-};
-
-/**
- * Ordered Python candidates: the explicit override first, then the
- * Windows `py` launcher, then bare names. Returns the command plus any
- * fixed leading args (e.g. ["py", "-3"]) for the first interpreter that
- * can actually run the worker (ultralytics + cv2 + torch) — a bare
- * interpreter that merely exists is skipped, not picked. Null when none
- * qualifies.
- */
-export function resolvePython(env: NodeJS.ProcessEnv = process.env, probe: PythonProbe = defaultProbe): string[] | null {
-  const override = env.DIFFUSION_STUDIO_PYTHON?.trim();
-  if (override) {
-    if (!probe(override, [])) {
-      throw new Error(
-        `DIFFUSION_STUDIO_PYTHON points at ${override}, which cannot run the segmentation worker. ` +
-          `Install the worker's packages there (python -m pip install ultralytics opencv-python torch) or unset it.`,
-      );
-    }
-    return [override];
-  }
-  const candidates: string[][] = [...(process.platform === "win32" ? [["py", "-3"]] : []), ["python"], ["python3"]];
-  for (const [command, ...args] of candidates) {
-    if (command && probe(command, args)) return [command, ...args];
-  }
-  return null;
+export function resolvePython(env?: NodeJS.ProcessEnv, probe?: PythonProbe): string[] | null {
+  return resolveWorkerPython(SEGMENT_IMPORTS, env, probe);
 }
 
-export type SegmentPathsInput = {
-  isPackaged: boolean;
-  appPath: string;
-  resourcesPath: string;
-  userData: string;
-};
-
-/** Where the worker script ships and where its weights live, dev and packaged. */
-export function segmentPaths(input: SegmentPathsInput): { scriptPath: string; modelsDir: string } {
-  return {
-    scriptPath: input.isPackaged
-      ? join(input.resourcesPath, "workers", "segment.py")
-      : join(input.appPath, "workers", "segment.py"),
-    modelsDir: join(input.userData, "models"),
-  };
+export function segmentPaths(input: WorkerPathsInput): { scriptPath: string; modelsDir: string } {
+  return workerPaths(input, "segment.py");
 }
 
 export type SegmentCallOptions = {
@@ -81,38 +33,27 @@ export type SegmentCallOptions = {
   conf?: number;
 };
 
-export type SegmentWorkerDeps = {
-  /** Resolved python command plus fixed args; see resolvePython. */
-  python: string[];
-  scriptPath: string;
-  modelsDir: string;
-  spawnFn?: typeof spawn;
-  /** Stderr lines and lifecycle notes go here; silent by default. */
-  log?: (message: string) => void;
-};
+export type SegmentWorkerDeps = Omit<ModelWorkerDeps, "extraEnv">;
 
-type Pending = {
-  resolve: (value: Record<string, unknown>) => void;
-  reject: (error: Error) => void;
-};
-
-export class SegmentWorker {
-  private readonly deps: SegmentWorkerDeps;
-  private child: ChildProcess | null = null;
-  private nextId = 1;
-  private readonly pending = new Map<number, Pending>();
-  private buffer = "";
-  private stderrTail = "";
-  private startPromise: Promise<void> | null = null;
-  /** Calls strictly serialize: one in flight, the rest chained behind it. */
-  private queue: Promise<unknown> = Promise.resolve();
-
+export class SegmentWorker extends ModelWorker {
   constructor(deps: SegmentWorkerDeps) {
-    this.deps = deps;
+    super({
+      ...deps,
+      extraEnv: {
+        // Weights and settings stay inside our models dir, not the
+        // user's global Ultralytics config.
+        YOLO_CONFIG_DIR: deps.modelsDir,
+        ULTRALYTICS_SETTINGS_DIR: deps.modelsDir,
+      },
+    });
   }
 
-  get running(): boolean {
-    return this.child !== null;
+  override async call(request: Record<string, unknown>): Promise<Record<string, unknown>> {
+    try {
+      return await super.call(request);
+    } catch (error) {
+      throw new Error(withHint((error as Error).message));
+    }
   }
 
   /** Model id, device, and the valid class names — also a cheap health check. */
@@ -132,131 +73,6 @@ export class SegmentWorker {
       ...(options.conf !== undefined ? { conf: options.conf } : {}),
     });
     return parseSegmentResult(res);
-  }
-
-  /** Ask the worker to exit, then kill it if it lingers. Safe to call twice. */
-  async stop(timeoutMs = 5000): Promise<void> {
-    const child = this.child;
-    this.child = null;
-    this.startPromise = null;
-    // In-flight calls fail here: the exit below is stop-initiated, so the
-    // exit handler stays quiet and must not double-report them.
-    const waiting = [...this.pending.values()];
-    this.pending.clear();
-    for (const { reject } of waiting) reject(new Error("The segmentation worker was stopped."));
-    if (!child || child.exitCode !== null || child.signalCode !== null) return;
-    const exited = new Promise<void>((resolve) => {
-      child.once("exit", () => resolve());
-    });
-    try {
-      child.stdin?.write(JSON.stringify({ id: 0, cmd: "shutdown" }) + "\n");
-    } catch {
-      // Already gone; the exit below still fires.
-    }
-    const timeout = new Promise<void>((resolve) => setTimeout(resolve, timeoutMs));
-    await Promise.race([exited, timeout]);
-    if (child.exitCode === null && child.signalCode === null) {
-      child.kill();
-      await exited;
-    }
-  }
-
-  private call(request: Record<string, unknown>): Promise<Record<string, unknown>> {
-    const run = this.queue.then(() => this.roundTrip(request));
-    // A rejection must not wedge the queue for later calls.
-    this.queue = run.catch(() => undefined);
-    return run;
-  }
-
-  private async roundTrip(request: Record<string, unknown>): Promise<Record<string, unknown>> {
-    await this.ensureStarted();
-    const id = this.nextId++;
-    const child = this.child;
-    if (!child?.stdin || !child.stdout) throw new Error("The segmentation worker is not running.");
-    const promise = new Promise<Record<string, unknown>>((resolve, reject) => {
-      this.pending.set(id, { resolve, reject });
-    });
-    child.stdin.write(JSON.stringify({ ...request, id }) + "\n");
-    return promise;
-  }
-
-  private ensureStarted(): Promise<void> {
-    this.startPromise ??= this.start();
-    return this.startPromise;
-  }
-
-  private async start(): Promise<void> {
-    const [command, ...fixedArgs] = this.deps.python;
-    if (!command) throw new Error("No Python command was configured for the segmentation worker.");
-    await mkdir(this.deps.modelsDir, { recursive: true });
-    const spawnFn = this.deps.spawnFn ?? spawn;
-    const child = spawnFn(command, [...fixedArgs, this.deps.scriptPath], {
-      stdio: ["pipe", "pipe", "pipe"],
-      windowsHide: true,
-      env: {
-        ...process.env,
-        // Weights and settings stay inside our models dir, not the
-        // user's global Ultralytics config.
-        YOLO_CONFIG_DIR: this.deps.modelsDir,
-        ULTRALYTICS_SETTINGS_DIR: this.deps.modelsDir,
-        // Plain UTF-8 stdio on Windows: no code-page mojibake in errors.
-        PYTHONUTF8: "1",
-        PYTHONIOENCODING: "utf-8",
-      },
-    });
-    this.deps.log?.(`[segment] spawned ${command} ${this.deps.scriptPath}`);
-    this.child = child;
-    this.buffer = "";
-    this.stderrTail = "";
-    child.stdout?.on("data", (chunk: Buffer) => this.onStdout(chunk));
-    child.stderr?.on("data", (chunk: Buffer) => {
-      this.stderrTail = (this.stderrTail + chunk.toString("utf8")).slice(-4096);
-    });
-    child.once("error", (error) => {
-      this.deps.log?.(`[segment] spawn failed: ${(error as Error).message}`);
-      this.onExit(`Could not start the segmentation worker (${command}): ${(error as Error).message}`);
-    });
-    child.once("exit", (code, signal) => {
-      if (this.child !== child) return; // stop() already cleared it
-      this.onExit(
-        `The segmentation worker exited${code === null ? ` on ${signal}` : ` with code ${code}`}` +
-          (this.stderrTail.trim() ? `: ${this.stderrTail.trim().split("\n").pop()}` : "."),
-      );
-    });
-  }
-
-  private onStdout(chunk: Buffer): void {
-    this.buffer += chunk.toString("utf8");
-    let newline = this.buffer.indexOf("\n");
-    while (newline >= 0) {
-      const line = this.buffer.slice(0, newline).trim();
-      this.buffer = this.buffer.slice(newline + 1);
-      newline = this.buffer.indexOf("\n");
-      if (!line) continue;
-      let res: Record<string, unknown>;
-      try {
-        res = JSON.parse(line) as Record<string, unknown>;
-      } catch {
-        this.deps.log?.(`[segment] non-JSON stdout: ${line.slice(0, 200)}`);
-        continue;
-      }
-      const id = res.id;
-      const pending = typeof id === "number" ? this.pending.get(id) : undefined;
-      if (!pending) continue;
-      this.pending.delete(id as number);
-      if (res.ok === true) pending.resolve(res);
-      else pending.reject(new Error(typeof res.error === "string" ? withHint(res.error) : "The segmentation worker failed."));
-    }
-  }
-
-  /** The child died: fail the in-flight call and clear for a lazy restart. */
-  private onExit(message: string): void {
-    this.child = null;
-    this.startPromise = null;
-    const error = new Error(message);
-    const waiting = [...this.pending.values()];
-    this.pending.clear();
-    for (const { reject } of waiting) reject(error);
   }
 }
 

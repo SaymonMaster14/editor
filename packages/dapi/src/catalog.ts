@@ -33,6 +33,7 @@ import { mediaRetime } from "./tools/media-retime";
 import { mediaScopes } from "./tools/media-scopes";
 import { mediaEffects } from "./tools/media-effects";
 import { mediaSegment } from "./tools/media-segment";
+import { mediaDepth } from "./tools/media-depth";
 import { audioLoudness } from "./tools/audio-loudness";
 import { audioBeats } from "./tools/audio-beats";
 import { fonts } from "./tools/fonts";
@@ -67,6 +68,7 @@ export const catalog = [
   mediaScopes,
   mediaEffects,
   mediaSegment,
+  mediaDepth,
   audioLoudness,
   audioBeats,
   models,

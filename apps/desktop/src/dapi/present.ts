@@ -31,6 +31,8 @@ export async function present(name: ToolName, args: unknown, result: unknown): P
       return presentEffects(result as ToolResult<"media_effects">, (args as ToolArgs<"media_effects">).output);
     case "media_segment":
       return presentSegment(result as ToolResult<"media_segment">, (args as ToolArgs<"media_segment">).output);
+    case "media_depth":
+      return presentDepth(result as ToolResult<"media_depth">, (args as ToolArgs<"media_depth">).output);
     case "media_filmstrip":
       return presentPreview(result as ToolResult<"media_filmstrip">, (args as ToolArgs<"media_filmstrip">).output, "filmstrip");
     case "media_waveform":
@@ -182,6 +184,35 @@ async function presentSegment(result: ToolResult<"media_segment">, output: strin
     cached: result.cached,
   };
   return { output: presented, images: [{ path: overlayPath, png: result.overlay }] };
+}
+
+/**
+ * Depth lands as two files: `depth.png` (the full-precision 16-bit map
+ * for compositing) and `preview.png` (8-bit grayscale, white = near, for
+ * eyeballing). Only the preview rides inline.
+ */
+async function presentDepth(result: ToolResult<"media_depth">, output: string | undefined): Promise<Presented> {
+  const dir = output ?? (await mkdtemp(join(tmpdir(), "dapi-depth-")));
+  await mkdir(dir, { recursive: true });
+  const depthPath = join(dir, "depth.png");
+  const previewPath = join(dir, "preview.png");
+  await writeFile(depthPath, result.depth);
+  await writeFile(previewPath, result.preview);
+  const presented: ToolOutput<"media_depth"> = {
+    path: result.path,
+    time: result.time,
+    width: result.width,
+    height: result.height,
+    engine: result.engine,
+    device: result.device,
+    ms: result.ms,
+    dmin: result.dmin,
+    dmax: result.dmax,
+    depth: depthPath,
+    preview: previewPath,
+    cached: result.cached,
+  };
+  return { output: presented, images: [{ path: previewPath, png: result.preview }] };
 }
 
 async function presentPreview(
