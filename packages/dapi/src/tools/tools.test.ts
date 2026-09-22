@@ -11,6 +11,7 @@ import { logs } from "./logs";
 import { mediaFilmstrip } from "./media-filmstrip";
 import { mediaGrab } from "./media-grab";
 import { mediaKey } from "./media-key";
+import { mediaRetime } from "./media-retime";
 import { mediaListen } from "./media-listen";
 import { mediaScenes } from "./media-scenes";
 import { mediaTrack } from "./media-track";
@@ -237,5 +238,24 @@ describe("media_key", () => {
     expect(issues(input.safeParse({ path: "/c.mp4", tolerance: -1 }))).toHaveProperty("tolerance");
     expect(issues(input.safeParse({ path: "/c.mp4", softness: 0 }))).toHaveProperty("softness");
     expect(input.safeParse({ path: "/c.mp4", screen: [0, 200, 0], tolerance: 40 }).success).toBe(true);
+  });
+});
+describe("media_retime", () => {
+  const input = mediaRetime.input;
+
+  it("parses a bare path with retime defaults", () => {
+    const args = input.parse({ path: "/c.mp4" });
+    expect(args.speed).toBeUndefined();
+    expect(args.reverse).toBeUndefined();
+    expect(args.freeze).toBeUndefined();
+    expect(args.ramp).toBeUndefined();
+  });
+
+  it("rejects bad speeds, freezes, and ramps", () => {
+    expect(issues(input.safeParse({ path: "/c.mp4", speed: 0 }))).toHaveProperty("speed");
+    expect(issues(input.safeParse({ path: "/c.mp4", fps: -1 }))).toHaveProperty("fps");
+    expect(issues(input.safeParse({ path: "/c.mp4", freeze: [{ at: 1, hold: -1 }] }))).toHaveProperty("freeze.0.hold");
+    expect(issues(input.safeParse({ path: "/c.mp4", ramp: [{ time: 0, speed: 0 }] }))).toHaveProperty("ramp.0.speed");
+    expect(input.safeParse({ path: "/c.mp4", speed: 0.5, reverse: true }).success).toBe(true);
   });
 });

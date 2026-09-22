@@ -245,6 +245,40 @@ media
   );
 
 media
+  .command("retime")
+  .description(describe("media_retime"))
+  .argument("<path>", field("media_retime", "path"))
+  .option("--fps <n>", field("media_retime", "fps"), numeric)
+  .option("--speed <n>", field("media_retime", "speed"), numeric)
+  .option("--reverse", field("media_retime", "reverse"))
+  .option("--freeze <at,hold...>", field("media_retime", "freeze"))
+  .option("--ramp <time,speed...>", field("media_retime", "ramp"))
+  .action(
+    (
+      ref: string,
+      opts: { fps?: number; speed?: number; reverse?: boolean; freeze?: string[]; ramp?: string[] },
+    ) =>
+      run("media_retime", {
+        path: assetPath(ref),
+        ...(opts.fps !== undefined ? { fps: opts.fps } : {}),
+        ...(opts.speed !== undefined ? { speed: opts.speed } : {}),
+        ...(opts.reverse !== undefined ? { reverse: opts.reverse } : {}),
+        ...(opts.freeze !== undefined
+          ? { freeze: opts.freeze.map((pair) => {
+              const [at, hold] = pair.split(",").map(numeric);
+              return { at: at as number, hold: hold as number };
+            }) }
+          : {}),
+        ...(opts.ramp !== undefined
+          ? { ramp: opts.ramp.map((pair) => {
+              const [time, speed] = pair.split(",").map(numeric);
+              return { time: time as number, speed: speed as number };
+            }) }
+          : {}),
+      }),
+  );
+
+media
   .command("transcribe")
   .description(describe("media_transcribe"))
   .argument("<path>", field("media_transcribe", "path"))

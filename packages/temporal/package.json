@@ -1,0 +1,28 @@
+{
+  "name": "@diffusionstudio/temporal",
+  "version": "0.1.0",
+  "description": "Temporal processing: time maps for speed, reverse, freeze, and ramps, plus nearest/blend frame sampling. Pure TypeScript, no DOM, no models — the renderer decodes; this package remaps time.",
+  "license": "MPL-2.0",
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "check": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "keywords": [
+    "retime",
+    "speed-ramp",
+    "slow-motion",
+    "time-mapping"
+  ],
+  "dependencies": {
+    "@diffusionstudio/scene": "*"
+  },
+  "devDependencies": {
+    "typescript": "~5.9.3",
+    "vitest": "^4.0.0"
+  }
+}

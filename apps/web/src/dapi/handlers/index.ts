@@ -24,6 +24,7 @@ import { mediaTrack } from "./media-track";
 import { mediaStabilize } from "./media-stabilize";
 import { mediaReframe } from "./media-reframe";
 import { mediaKey } from "./media-key";
+import { mediaRetime } from "./media-retime";
 import { audioLoudness } from "./audio-loudness";
 import { audioBeats } from "./audio-beats";
 
@@ -53,6 +54,7 @@ export const handlers: Handlers = {
   media_stabilize: mediaStabilize,
   media_reframe: mediaReframe,
   media_key: mediaKey,
+  media_retime: mediaRetime,
   audio_loudness: audioLoudness,
   audio_beats: audioBeats,
 };
