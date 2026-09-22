@@ -32,6 +32,8 @@
 - NLE ops: ripple/roll/slip/slide, lift/extract — DONE (milestone below).
   Insert/overwrite, I/O range, source monitor — DONE (source milestone below).
   Markers — DONE (markers milestone below).
+  Keyframe/canvas/audio human-correction gaps — DONE (correction milestone
+  below).
 - Premiere keymap gaps: frame step is on A/D, arrows nudge pixels; no edit-point
   navigation. I/O + insert/overwrite (`,`/`.`) DONE (source milestone below);
   J/K/L shuttle exists.
@@ -177,11 +179,65 @@ Commit `4ee8ac1`, pushed to `fork/diffusion-on-steroids`.
   re-run 22/22 (renderer/snapping/shortcut/menu changes
   regression-clean).
 
+## Milestone: keyframe/audio corrections + canvas text editing (plan §7)
+
+Commit `c2d71af`, pushed to `fork/diffusion-on-steroids`.
+
+- Audited first: keyframe drag-move (timeline diamonds), easing panel,
+  gain knob + mute/solo + volume automation, canvas
+  move/resize/rotate/marquee/snapping, anchor picker, and alignment all
+  already existed and are reused untouched. The gaps were: no value
+  editor for a selected keyframe, no canonical keyframe ops (drag wrote
+  `time` directly, Delete left empty tracks), no fade/pan UI (runtime
+  `Fade`/`Pan` traits + JSX props existed), no keyframe/audio DAPI
+  tools, and no direct canvas text editing.
+- `engine/keyframes.tsx`: canonical `moveKeyframe` (clip-local frames,
+  clamp at 0, occupied-frame refusal like markers),
+  `setKeyframeValue`, `deleteKeyframe` (track goes with its last
+  keyframe). Timeline drag, `toggleKeyframe`, and the Delete key (which
+  partitions keyframe vs rest) all funnel through them.
+- `KeyframeSettings` inspector panel (new, mounted above the easing
+  panel for keyframe selections): property label, clip-local frame
+  field, value field (CSS hex on color tracks), delete; multi-select
+  deletes as a block.
+- `engine/audio.ts` (new): canonical `setGain`/`setFadeIn`/`setFadeOut`
+  /`setPan`/`setMuted` (dB clamp, rounding, unset-at-default, volume/pan
+  keyframe sync). The audio panel's writes refactored onto them, plus
+  new Fade In/Out (seconds) and Pan (-1..1, slider, keyframe diamond)
+  rows reusing the existing `Keyframe` diamond component.
+- `keyframe` + `audio_edit` DAPI tools + renderer handlers + `dapi
+  keyframe`/`dapi audio` CLI (add/remove/move/set/list; set/get with
+  gain/fadeIn/fadeOut/pan/muted; finite-number validation, track state
+  readback for verify-without-reread).
+- Canvas text editing: double-clicking a text leaf (both the entity and
+  mask paths, when there is nothing to drill into) mounts a `<textarea>`
+  over the node's box — positioned per frame in `hud-system.ts` from
+  `entityQuad` (bbox, top-edge rotation, node typeface scaled by
+  on-screen size), writing live through canonical `editText` with the
+  `TEXT_EDIT` tool held, Enter commits, Escape restores, dragstart and
+  rename cross-dismiss. Mirrors the `name-input` overlay pattern; no new
+  runtime support needed.
+- E2E `tmp/correct-e2e/proof.mjs`: 32/32 on the live stack — every
+  keyframe/audio op, `<keyframeTrack>` + audio-prop file sync (incl.
+  track removal on last delete, prop unset at default), occupied-frame
+  refusal, clamp semantics, one-step undo/redo, error cases, reopen
+  persistence. Motion proven on pixels: a capture at 0s/1s shows the
+  title at x=400 vs x=100 (`tmp/correct-e2e/0f-01s.png`); app window
+  screenshot healthy after the HUD/interaction changes. NLE 27/27,
+  source 22/22, marker 26/26 re-run green.
+- Honest outs: crop has no runtime/JSX support (masks are the native
+  crop-ish tool); crossfades need an overlap model beyond this slice's
+  fades; guides/safe-zones overlay deferred. Physical dblclick/panel/
+  Delete-key verification is human-verified (see Limitations).
+
 ## Fire tests
 
 NLE E2E (agent path over DAPI/CLI): 27/27 green, see milestone above.
 Source E2E (agent path): 22/22 green, see source milestone above.
 Marker E2E (agent path): 26/26 green, see markers milestone above.
+Correction E2E (agent path): 32/32 green, see correction milestone
+above; keyframed motion proven on captured pixels; app window
+screenshot healthy.
 Monitor panel live-verified (mount + select→load + clean logs); marker
 flags live-verified on canvas (appear/vanish/position/color via
 screenshots). Physical key/click presses of I/O/`,`/`.`, M/⇧M/⌥M, flag
@@ -216,6 +272,15 @@ cli 15/15, desktop 207 passed / 0 failed — same pre-existing
 marker changes); `eslint` 0 errors (same 3 pre-existing warnings);
 marker E2E 26/26, NLE E2E 27/27, source E2E 22/22 on the live stack.
 
+Correction-milestone gate at `c2d71af`: `npm run check` clean (all
+workspaces); unit suites green (same counts — no new unit tests this
+slice, desktop still exits 1 on the same pre-existing libuv
+`fs-event.c` watch assertion); `eslint` 0 errors (same 3 pre-existing
+warnings); correction E2E 32/32, marker E2E 26/26, NLE E2E 27/27,
+source E2E 22/22 on the live stack (dev stack restarted once to load
+the new MCP tools — the desktop main bundle bakes the catalog at
+boot, per the dev-gotcha limitation).
+
 ## Limitations
 
 - `apps/desktop` suite: `projects.watch.test.ts` crashes its vitest worker
@@ -231,7 +296,14 @@ marker E2E 26/26, NLE E2E 27/27, source E2E 22/22 on the live stack.
   logs; the marker flags via canvas screenshots; the shortcuts are
   data-table entries over E2E-proven ops. The MarkerPanel mount itself
   (scene selection → panel) is typecheck + code-path verified only.
-  Human fire-test items (§54.18–25) remain for a real keyboard.
+  Same for this slice: the KeyframeSettings panel mount (keyframe
+  selection → panel), the audio fade/pan rows (clip selection → rows),
+  the Delete-key keyframe routing, and the canvas text-field mount
+  (text-leaf double-click → overlay) are typecheck + code-path
+  verified over E2E-proven canonical ops — the ops they call are the
+  ops the proof drives — but no headless path exists to click/select/
+  double-click them from CLI. Human fire-test items (§54.13–17) remain
+  for a real keyboard.
 - No panel-focus model exists, so global I/O marks the source monitor even
   when the timeline has the user's attention; timeline in/out is menu
   clicks ("Set work area in/out") until focus-sensitive routing exists.
@@ -251,5 +323,5 @@ marker E2E 26/26, NLE E2E 27/27, source E2E 22/22 on the live stack.
 
 ## Final SHA
 
-Pending — goal continues. Interim HEAD: `4ee8ac1`
-(`fork/diffusion-on-steroids`), markers slice complete (plan §2–§4, §8–§10).
+Pending — goal continues. Interim HEAD: `c2d71af`
+(`fork/diffusion-on-steroids`), correction slice complete (plan §7).
