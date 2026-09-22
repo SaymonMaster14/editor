@@ -59,14 +59,13 @@ causes — buttons + shortcuts are the exposure). No canvas-clip right-click men
 (immediate-mode canvas has no menu infra; row + bin menus cover the ops).
 No track lock / source patching yet. Plain `S` intentionally unbound.
 
-## Capability matrix
 
 | CAPABILITY | BACKEND | FRONTEND | HUMAN TESTED | AGENT ACCESS | NOTES |
 |---|---|---|---|---|---|
 | timeline split/razor | split.tsx | toolbar+C+click+menu | live CLI | split op (new) | single-step undo proven |
 | lift / ripple delete | nle.ts | menu+Shift+Del | live CLI | timeline_edit | — |
 | Q/W ripple trim | nle.ts (Q new) | Q/W keys | live CLI (Q) | both ops | W via rippleTrimOut |
-| roll/slip/slide/move/trim | nle.ts/timing.ts | move/trim drags only | live CLI | timeline_edit | roll/slip/slide gestures still agent-only |
+| roll/slip/slide/move/trim | nle.ts/timing.ts | move/trim drags, Alt+Arrow slide/slip | live CLI (slip/slide) | timeline_edit | roll gesture still agent-only |
 | source monitor/insert/overwrite | source-edit.ts | SourceMonitorPanel + dual viewer | pre-existing | source_edit | same trait |
 | markers | markers.ts | ruler+menu+M | pre-existing | marker | — |
 | keyframes | keyframes.tsx | diamonds+inspector | pre-existing | keyframe | — |
