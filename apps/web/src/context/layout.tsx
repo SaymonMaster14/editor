@@ -10,6 +10,9 @@ import { store } from '@/init';
 /** The timeline's presentation: NLE shows track headers and pro controls, compact keeps Diffusion minimal. Pure presentation — same engine, same rows. */
 export type TimelineView = 'compact' | 'nle';
 
+/** The viewer arrangement: program alone, or the source monitor beside it. Default program-only. */
+export type ViewerMode = 'program' | 'source-program';
+
 type LayoutContextValue = {
   uiVisible: Accessor<boolean>;
   timelineMinimized: Accessor<boolean>;
@@ -19,6 +22,8 @@ type LayoutContextValue = {
   toggleTimeline(): void;
   timelineView: Accessor<TimelineView>;
   toggleTimelineView(): void;
+  viewerMode: Accessor<ViewerMode>;
+  toggleViewerMode(): void;
 };
 const LayoutContext = createContext<LayoutContextValue>();
 
@@ -38,10 +43,14 @@ export function LayoutProvider(props: { children: JSX.Element }) {
   const [timelineView, setTimelineView] = createStoredSignal(
     store.define<TimelineView>('layout.timelineView', 'nle'),
   );
+  const [viewerMode, setViewerMode] = createStoredSignal(
+    store.define<ViewerMode>('layout.viewerMode', 'program'),
+  );
 
   const toggleUI = () => setUiVisible(!uiVisible());
   const toggleTimeline = () => setTimelineMinimized(!timelineMinimized());
   const toggleTimelineView = () => setTimelineView(timelineView() === 'nle' ? 'compact' : 'nle');
+  const toggleViewerMode = () => setViewerMode(viewerMode() === 'program' ? 'source-program' : 'program');
 
   return (
     <LayoutContext.Provider
@@ -54,6 +63,8 @@ export function LayoutProvider(props: { children: JSX.Element }) {
         toggleTimeline,
         timelineView,
         toggleTimelineView,
+        viewerMode,
+        toggleViewerMode,
       }}>
       {props.children}
     </LayoutContext.Provider>

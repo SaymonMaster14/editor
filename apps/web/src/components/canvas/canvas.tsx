@@ -2,6 +2,7 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
+import { Show } from "solid-js";
 import { useWorld } from "@diffusionstudio/koota-solid";
 import { findSceneAt, screenToWorld, worldToLocal, Library, Root } from "@diffusionstudio/runtime";
 import { CameraController, EngineCanvas } from "@/engine";
@@ -9,6 +10,8 @@ import { insertAsset } from "@/engine/insert-asset";
 import { droppedFiles, importFiles } from "@/engine/asset-actions";
 import { Toolbar } from "./toolbar";
 import { Transport } from "./transport";
+import { SourcePane } from "./source-pane";
+import { useLayout } from "@/context/layout";
 import { DrawOverlay } from "./draw-overlay";
 import { DesktopAppBanner } from "./desktop-app-banner";
 import { toast } from "somoto"
@@ -19,6 +22,8 @@ import type { Asset } from "@diffusionstudio/assets";
 
 export function Canvas() {
   const world = useWorld();
+  const { viewerMode } = useLayout();
+  const dual = () => viewerMode() === 'source-program';
 
   /**
    * Drops onto the canvas: library assets (dragged from the panel) land where
@@ -70,9 +75,14 @@ export function Canvas() {
   }
 
   return (
-    <div class="relative size-full bg-background">
+    <div class="relative size-full bg-background flex">
+      <Show when={dual()}>
+        <div class="w-[380px] shrink-0 border-r border-border-strong">
+          <SourcePane />
+        </div>
+      </Show>
       <div
-        class="absolute inset-0"
+        class="relative flex-1 min-w-0 h-full"
         on:drop={handleDropEvent}
         on:dragover={handleDragOver}
       >

@@ -9,9 +9,10 @@ import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { formatFrames } from "@/components/timeline/time-format";
-import { useActiveScene, useDerived } from "@/engine/hooks";
+import { useLayout } from "@/context/layout";
 import { nextEditPoint, prevEditPoint } from "@/engine/seek-edit";
 import { editPlayhead } from "@/engine/timing";
+import { useActiveScene, useDerived } from "@/engine/hooks";
 
 /**
  * The program monitor's transport: edit/frame stepping, play and loop
@@ -20,11 +21,11 @@ import { editPlayhead } from "@/engine/timing";
  */
 export function Transport() {
   const world = useWorld();
+  const { viewerMode, toggleViewerMode } = useLayout();
   const scene = useActiveScene();
   const frameRate = useTrait(world, FrameRate);
   const playback = useTrait(scene, Playback);
   const now = useDerived(() => scene()?.get(Computed)?.localTime ?? 0);
-
   const step = (delta: number) => {
     const entity = scene();
     if (!entity) return;
@@ -39,6 +40,17 @@ export function Transport() {
 
   return (
     <div class="absolute bottom-4 right-4 rounded-xl px-2 py-1.5 bg-background border border-border-strong flex gap-1 items-center z-10">
+      <Tooltip>
+        <TooltipTrigger
+          as={Button}
+          size="icon"
+          variant={viewerMode() === 'source-program' ? 'default' : 'ghost'}
+          onClick={toggleViewerMode}
+        >
+          <Icon name="sidebar" class="size-6" />
+        </TooltipTrigger>
+        <TooltipContent>{viewerMode() === 'source-program' ? 'Program only' : 'Source + Program'}</TooltipContent>
+      </Tooltip>
       <Tooltip>
         <TooltipTrigger
           as={Button}
