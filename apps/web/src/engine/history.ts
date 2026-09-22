@@ -598,11 +598,15 @@ export class EditHistory {
 	}
 }
 
-/** A captured node as `renderAuthored` takes it. */
+/**
+ * A captured node as `renderAuthored` takes it — its old id among the
+ * props, so the writer can put the element back under the name it had
+ * (a taken name mints afresh; see `insertElement`).
+ */
 function toAuthored(node: CapturedNode): AuthoredTree {
 	return {
 		tag: node.tag,
-		props: { ...node.props },
+		props: { ...node.props, ...(node.id === undefined ? {} : { id: node.id }) },
 		...(node.text === undefined ? {} : { text: node.text }),
 		children: node.children.map(toAuthored),
 	};

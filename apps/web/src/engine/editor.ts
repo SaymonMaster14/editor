@@ -11,7 +11,7 @@
  */
 
 import { Active, Background, Chars, colorToHex, Computed, DEFAULT_BACKGROUND, FrameRate, framesToSeconds, getActiveEntity, getEntityChildren, getEntityTree, getIntrinsicPaint, getParentEntity, getTimelineOrigin, isText, Loop, PaintType, Selected, Sequential, setActive, Size, Source, Stage } from '@diffusionstudio/runtime';
-import { isAssetRef, isPropValue, serializeAssetRef, SOURCE_ATTR } from '@diffusionstudio/jsx';
+import { isAssetRef, isPropValue, parseSource, serializeAssetRef, SOURCE_ATTR } from '@diffusionstudio/jsx';
 import { createRoot } from 'solid-js';
 
 import { authoredElement, authoredTree, getRuntimeDocument, insert, isSceneNode, renderAuthored, withDocument } from '@diffusionstudio/reconciler';
@@ -115,6 +115,8 @@ export interface MoveEdit {
  */
 export interface CapturedNode {
 	source: string;
+	/** The element's id in the file, when one names it there (see `captureNode`). */
+	id?: string;
 	tag: string;
 	props: Record<string, unknown>;
 	text?: string;
@@ -239,8 +241,16 @@ function captureNode(world: World, entity: Entity): CapturedNode | undefined {
 		if (node) children.push(node);
 	}
 
+	// The mount consumes `id` as the address rather than keeping it as a
+	// prop, so the props alone would lose it: an undo would put the element
+	// back under a minted name. A numeric locator is a position, not a name,
+	// and restores as one (a fresh mint).
+	const locator = parseSource(source)?.locator;
+	const id = typeof locator === 'string' ? locator : undefined;
+
 	return {
 		source,
+		...(id === undefined ? {} : { id }),
 		tag: element.tag,
 		props: element.props,
 		...(element.text === undefined ? {} : { text: element.text }),
@@ -874,11 +884,14 @@ export class DocumentEditor {
 	/**
 	 * `entity`'s subtree as a project would author a copy of it: `selected`
 	 * goes (the copy is selected on its own terms) and so does `active` (one
-	 * entity holds it).
+	 * entity holds it), and so does `id` — an undo can put an element back
+	 * under its old id, which then sits in its props, and a copy spelling it
+	 * too would ask the file for a name that is taken.
 	 */
 	private spell(entity: Entity): AuthoredTree | undefined {
 		const tree = authoredTree(this.world, entity);
 		if (!tree) return undefined;
+		delete tree.props.id;
 		delete tree.props.selected;
 		delete tree.props.active;
 		return tree;

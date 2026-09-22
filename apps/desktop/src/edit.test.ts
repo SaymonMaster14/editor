@@ -42,4 +42,57 @@ describe("applyEdits", () => {
     // The constant is someone else's too, and stays.
     expect(text).toContain(`const X = 100;`);
   });
+
+  it("puts an undo back under the id it had when nothing holds it", async () => {
+    await writeFile(
+      join(dir, FILE),
+      `export default () => (\n  <sequence id="line">\n    <video id="clipA" src="a.mp4" />\n  </sequence>\n);\n`,
+    );
+
+    const result = await applyEdits({ dir }, [
+      { kind: "insert", source: "pending#1", parent: `${FILE}:line`, tag: "video", props: { id: "clipB", src: "b.mp4" } },
+    ]);
+
+    expect(result.skipped).toEqual([]);
+    expect(result.ids).toEqual({ "pending#1": `${FILE}:clipB` });
+    const text = await readFile(join(dir, FILE), "utf8");
+    expect(text).toContain(`id="clipB"`);
+  });
+
+  it("mints afresh when the requested id is taken, never doubling it", async () => {
+    await writeFile(
+      join(dir, FILE),
+      `export default () => (\n  <sequence id="line">\n    <video id="clipB" src="b.mp4" />\n  </sequence>\n);\n`,
+    );
+
+    const result = await applyEdits({ dir }, [
+      { kind: "insert", source: "pending#1", parent: `${FILE}:line`, tag: "video", props: { id: "clipB", src: "b.mp4" } },
+    ]);
+
+    expect(result.skipped).toEqual([]);
+    const text = await readFile(join(dir, FILE), "utf8");
+    expect(text.match(/id="clipB"/g)).toHaveLength(1);
+    expect(result.ids?.["pending#1"]).not.toBe(`${FILE}:clipB`);
+  });
+
+  it("restores the id when the remove lands in the same write", async () => {
+    await writeFile(
+      join(dir, FILE),
+      `export default () => (\n  <sequence id="line">\n    <video id="clipB" src="b.mp4" />\n  </sequence>\n);\n`,
+    );
+
+    // The order the canvas sends them: the insert first, the cut last.
+    const result = await applyEdits({ dir }, [
+      { kind: "insert", source: "pending#1", parent: `${FILE}:line`, tag: "video", props: { id: "clipB", src: "b.mp4", x: 5 } },
+      { kind: "remove", source: `${FILE}:clipB` },
+    ]);
+
+    expect(result.skipped).toEqual([]);
+    expect(result.ids).toEqual({ "pending#1": `${FILE}:clipB` });
+    const text = await readFile(join(dir, FILE), "utf8");
+    expect(text.match(/id="clipB"/g)).toHaveLength(1);
+    // The survivor is the insert, not the element the cut took.
+    expect(text).toContain("x={5}");
+  });
+
 });

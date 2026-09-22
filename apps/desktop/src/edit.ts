@@ -113,6 +113,56 @@ function idAllocator(taken: Set<string>): () => string {
   };
 }
 
+/**
+ * The ids one file's removes cut: an insert asking for one of them back is
+ * an undo landing in the same write as the remove it takes back, and is
+ * placed under a fresh name until the cut runs (see `InsertNaming`).
+ */
+function freedIds(file: string, entries: SourceEdit[]): Set<string> {
+  const freed = new Set<string>();
+  for (const edit of entries) {
+    if (edit.kind !== "remove") continue;
+    const address = parseSource(edit.source);
+    if (address?.file === file && typeof address.locator === "string") freed.add(address.locator);
+  }
+  return freed;
+}
+
+/**
+ * What an insert is named with. An insert may ask for its element's old id
+ * back — an undo puts it back under the name it had — which is used when
+ * nothing holds it. One this same write cuts is placed under a fresh name
+ * first and renamed once the cut has run (`renames`, claimed once per id);
+ * anything else taken mints afresh. Never two elements under one id.
+ */
+class InsertNaming {
+  public readonly renames: { source: string; temp: string; requested: string }[] = [];
+  private readonly claimed = new Set<string>();
+  private readonly taken: Set<string>;
+  private readonly freed: Set<string>;
+  private readonly nextId: () => string;
+
+  public constructor(taken: Set<string>, freed: Set<string>, nextId: () => string) {
+    this.taken = taken;
+    this.freed = freed;
+    this.nextId = nextId;
+  }
+
+  public name(requested: string | undefined, source: string): string {
+    if (requested !== undefined && !this.taken.has(requested)) {
+      this.taken.add(requested);
+      return requested;
+    }
+    if (requested !== undefined && this.freed.has(requested) && !this.claimed.has(requested)) {
+      const temp = this.nextId();
+      this.claimed.add(requested);
+      this.renames.push({ source, temp, requested });
+      return temp;
+    }
+    return this.nextId();
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Values
 
@@ -757,7 +807,11 @@ class SourceWriter {
    * alone entirely.
    */
   private editFile(file: string, sourceFile: SourceFile, entries: SourceEdit[]): FileWrite | undefined {
-    const nextId = idAllocator(idsIn(sourceFile));
+    const taken = idsIn(sourceFile);
+    const nextId = idAllocator(taken);
+    // What an insert is named with: an undo asks for its element's old id
+    // back, and one this same write cuts is renamed once the cut has run.
+    const naming = new InsertNaming(taken, freedIds(file, entries), nextId);
     const skipped: string[] = [];
     const ids: Record<string, string> = {};
     const unrolled: string[] = [];
@@ -770,7 +824,7 @@ class SourceWriter {
         }
 
         if (edit.kind === "insert") {
-          if (!this.insertElement(file, sourceFile, edit, ids, nextId)) skipped.push(edit.source);
+          if (!this.insertElement(file, sourceFile, edit, ids, naming)) skipped.push(edit.source);
           continue;
         }
 
@@ -849,6 +903,17 @@ class SourceWriter {
       return undefined;
     }
 
+    // The renames an insert was owed an id this write cut: the cuts have run
+    // by now, so the name is free unless its cut was skipped — in which case
+    // the fresh name stands, and the answer already says it.
+    for (const rename of naming.renames) {
+      if (findTag(sourceFile, rename.requested) !== undefined) continue;
+      const tag = findTag(sourceFile, rename.temp);
+      if (!tag) continue;
+      setProp(tag, ID_ATTR, rename.requested);
+      ids[rename.source] = formatSource(file, rename.requested);
+    }
+
     // The tree an edit leaves behind answers for itself before it is printed.
     this.dropUnparsed([file]);
     return this.files.has(file) ? { skipped, ids, unrolled } : undefined;
@@ -890,7 +955,7 @@ class SourceWriter {
     sourceFile: SourceFile,
     edit: SourceInsert,
     ids: Record<string, string>,
-    nextId: () => string,
+    naming: InsertNaming,
   ): boolean {
     if (!isCompositionTag(edit.tag)) return false;
 
@@ -910,11 +975,15 @@ class SourceWriter {
     // Placed bare and named, then given its props the way any element is:
     // one attribute at a time, re-found by name after each (editing one
     // attribute forgets its siblings).
-    const id = nextId();
+    const requested = edit.props[ID_ATTR];
+    const id = naming.name(typeof requested === "string" ? requested : undefined, edit.source);
     const opening = `<${edit.tag} ${ID_ATTR}="${id}"`;
     const child = edit.text === undefined ? `${opening} />` : `${opening}>${jsxText(edit.text)}</${edit.tag}>`;
     insertChild(sourceFile, parent, child, before);
     for (const [name, value] of Object.entries(edit.props)) {
+      // The name went on the opening tag: writing it again would either
+      // restate it or claim one a mint refused.
+      if (name === ID_ATTR) continue;
       setProp(findTag(sourceFile, id)!, name, value);
       if (isSerializedAssetRef(value)) ensureDeclarationImports(sourceFile, value);
     }
