@@ -3,6 +3,7 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 import { describe, expect, it } from "vitest";
+import { audioBeats } from "./audio-beats";
 import { capture } from "./capture";
 import { context } from "./context";
 import { exportScene } from "./export";
@@ -128,5 +129,21 @@ describe("image tools", () => {
     expect(capture.result!.safeParse([{ timecode: "0f", png: new Uint8Array(3) }]).success).toBe(true);
     expect(capture.output.safeParse({ images: [{ timecode: "0f", path: "/tmp/0f.png" }] }).success).toBe(true);
     expect(capture.output.safeParse({ images: [{ timecode: "0f", png: new Uint8Array(3) }] }).success).toBe(false);
+  });
+});
+
+describe("audio_beats", () => {
+  const input = audioBeats.input;
+
+  it("parses a bare path with an open tempo range", () => {
+    const args = input.parse({ path: "/m.mp4" });
+    expect(args.minBpm).toBeUndefined();
+    expect(args.maxBpm).toBeUndefined();
+  });
+
+  it("rejects an inverted or non-positive tempo range", () => {
+    expect(issues(input.safeParse({ path: "/m.mp4", minBpm: 200, maxBpm: 60 })).maxBpm).toMatch(/less than maxBpm/);
+    expect(issues(input.safeParse({ path: "/m.mp4", minBpm: 0 }))).toHaveProperty("minBpm");
+    expect(input.safeParse({ path: "/m.mp4", minBpm: 90, maxBpm: 140 }).success).toBe(true);
   });
 });

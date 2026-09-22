@@ -162,6 +162,16 @@ media
   );
 
 media
+  .command("beats")
+  .description(describe("audio_beats"))
+  .argument("<path>", field("audio_beats", "path"))
+  .option("--min-bpm <bpm>", field("audio_beats", "minBpm"), numeric)
+  .option("--max-bpm <bpm>", field("audio_beats", "maxBpm"), numeric)
+  .action((ref: string, opts: Omit<ToolInput<"audio_beats">, "path">) =>
+    run("audio_beats", { path: assetPath(ref), ...opts }),
+  );
+
+media
   .command("transcribe")
   .description(describe("media_transcribe"))
   .argument("<path>", field("media_transcribe", "path"))

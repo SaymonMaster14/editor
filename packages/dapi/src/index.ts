@@ -19,7 +19,7 @@ export type { DapiErrorCode } from "./errors";
 
 export { MAX_FRAMES_PER_SHEET, Bytes } from "./schemas";
 
-export { LoudnessMeasurement, finiteDb } from "./audio";
+export { LoudnessMeasurement, BeatGridMeasurement, finiteDb } from "./audio";
 
 export { INLINE_MAX_IMAGES, INLINE_MAX_BYTES, qaDelivery, selectSweepPositions, framePixelStats, detectLayoutIssues } from "./qa";
 
@@ -129,5 +129,7 @@ export type MediaListenRequest = ToolArgs<"media_listen">;
 export type MediaListenResult = ToolResult<"media_listen">;
 export type AudioLoudnessRequest = ToolArgs<"audio_loudness">;
 export type AudioLoudnessResult = ToolResult<"audio_loudness">;
+export type AudioBeatsRequest = ToolArgs<"audio_beats">;
+export type AudioBeatsResult = ToolResult<"audio_beats">;
 export type FontsRequest = ToolArgs<"fonts">;
 export type ReportRequest = ToolArgs<"report">;

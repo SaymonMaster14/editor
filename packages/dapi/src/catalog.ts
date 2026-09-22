@@ -25,6 +25,7 @@ import { mediaFilmstrip } from "./tools/media-filmstrip";
 import { mediaWaveform } from "./tools/media-waveform";
 import { mediaListen } from "./tools/media-listen";
 import { audioLoudness } from "./tools/audio-loudness";
+import { audioBeats } from "./tools/audio-beats";
 import { fonts } from "./tools/fonts";
 import { report } from "./tools/report";
 
@@ -49,6 +50,7 @@ export const catalog = [
   mediaWaveform,
   mediaListen,
   audioLoudness,
+  audioBeats,
   models,
   voices,
   whoami,

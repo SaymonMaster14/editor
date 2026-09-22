@@ -23,3 +23,16 @@ export const LoudnessMeasurement = z.object({
 export function finiteDb(value: number): number | null {
   return Number.isFinite(value) ? value : null;
 }
+
+/**
+ * The wire shape of a tracked beat grid, as audio_beats returns it.
+ * Mirrors @diffusionstudio/audio's BeatGrid, except an unfound tempo
+ * is null rather than 0: null reads as what it is — no pulse found.
+ */
+export const BeatGridMeasurement = z.object({
+  bpm: z.number().nullable().describe("estimated tempo; null when the audio carries no beat grid (silence, drone, too short)"),
+  beats: z.array(z.number()).describe("beat times in seconds, ascending, spanning the analyzed audio; empty without a grid"),
+  onsets: z.array(z.number()).describe("detected attack times in seconds, ascending (transients — kept even without a grid)"),
+  confidence: z.number().describe("mean onset strength at beats over mean onset strength; ~1 means no grid, well above 1 means beats land on attacks"),
+  seconds: z.number().describe("analyzed program length, seconds"),
+});
