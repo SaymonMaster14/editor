@@ -38,6 +38,8 @@ import { mediaFlow } from "./tools/media-flow";
 import { timelineEdit } from "./tools/timeline-edit";
 import { sourceEdit } from "./tools/source-edit";
 import { marker } from "./tools/marker";
+import { keyframe } from "./tools/keyframe";
+import { audioEdit } from "./tools/audio-edit";
 import { audioLoudness } from "./tools/audio-loudness";
 import { audioBeats } from "./tools/audio-beats";
 import { fonts } from "./tools/fonts";
@@ -58,6 +60,8 @@ export const catalog = [
   timelineEdit,
   sourceEdit,
   marker,
+  keyframe,
+  audioEdit,
   assetsSearch,
   assetsImport,
   mediaProbe,

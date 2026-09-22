@@ -42,6 +42,7 @@ import { TransitionSettings } from "./transition";
 import { MasksSettings } from "./masks";
 import { AudioSettings } from "./audio";
 import { InterpolationSettings } from "./interpolation";
+import { KeyframeSettings } from "./keyframe";
 
 import type { Entity } from "koota";
 
@@ -198,6 +199,7 @@ export function Inspector() {
           </Show>
 
           <Show when={includesTarget("keyframe")}>
+            <KeyframeSettings selection={keyframes()} />
             <InterpolationSettings selection={keyframes()} />
           </Show>
         </ControlScrollArea>

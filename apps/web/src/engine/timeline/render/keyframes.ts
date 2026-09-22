@@ -10,14 +10,14 @@ import {
 	KeyframeDragOrigin,
 	Selected,
 	findClosestParentGeometry,
-	framesToSeconds,
 	store,
 } from '@diffusionstudio/runtime';
 
 import { getDocumentEditor } from '../../editor';
+import { moveKeyframe } from '../../keyframes';
 import { KEYFRAME_TRACK_HEIGHT } from '../config';
 import { getRowTransform } from '../layout';
-import { framesToPixels, getFrameRate, getResolution, getViewport, pixelsToFrames } from '../view';
+import { framesToPixels, getResolution, getViewport, pixelsToFrames } from '../view';
 
 import type { Entity, World } from 'koota';
 import type { RowCursor } from '../layout';
@@ -120,7 +120,8 @@ export function renderKeyframeTrack(
 /**
  * Selecting and moving one keyframe. A keyframe's time is a prop of its
  * element, so a drag of it is an edit like any other; the drag is measured
- * from where it started, in the clip's own time.
+ * from where it started, in the clip's own time, and lands through the
+ * canonical `moveKeyframe`, with its clamp and occupied-frame refusal.
  */
 function handleKeyframe(
 	world: World,
@@ -164,7 +165,7 @@ function handleKeyframe(
 	// The pointer moves in scene frames; the keyframe lives in the clip's,
 	// which run `rate` times as fast.
 	const moved = pixelsToFrames(position.deltaX, resolution) * rate;
-	editor.editProperty(keyframe, 'time', framesToSeconds(Math.max(0, origin.time + moved), getFrameRate(world)));
+	moveKeyframe(world, editor, keyframe, origin.time + moved);
 }
 
 function diamond(ctx: CanvasRenderingContext2D, x: number, y: number): void {

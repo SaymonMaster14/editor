@@ -33,6 +33,8 @@ import { mediaFlow } from "./media-flow";
 import { timelineEdit } from "./timeline-edit";
 import { sourceEdit } from "./source-edit";
 import { marker } from "./marker";
+import { keyframe } from "./keyframe";
+import { audioEdit } from "./audio-edit";
 import { audioLoudness } from "./audio-loudness";
 import { audioBeats } from "./audio-beats";
 
@@ -71,6 +73,8 @@ export const handlers: Handlers = {
   timeline_edit: timelineEdit,
   source_edit: sourceEdit,
   marker,
+  keyframe,
+  audio_edit: audioEdit,
   audio_loudness: audioLoudness,
   audio_beats: audioBeats,
 };

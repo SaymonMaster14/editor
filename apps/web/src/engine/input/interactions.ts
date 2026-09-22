@@ -23,7 +23,7 @@ import {
 	computeGroupBounds, computeLocalMatrix, decompose2D, entityAnchor,
 	entityOffset, entityQuad, entityWorldMat, enterEntity,
 	findKeyframeTrackEntity, getParentEntity, getParentNode, getSceneAncestor,
-	getSelection, getSelectionMask, identity2D, invert2D, isPointerInEntity,
+	getSelection, getSelectionMask, identity2D, invert2D, isPointerInEntity, isText,
 	multiply2D, quadCenter, quadContainsQuad, quadsIntersect, rectToQuad,
 	rotate2D, scale2D,
 	store, syncInteractiveState, togglePlayback, transformPoint, translate2D,
@@ -35,6 +35,7 @@ import { syncKeyframe } from '../keyframes';
 import { Hud, Keys, Pointer, SnapLines } from '../traits';
 import { getToolCursor, updateCursor, type CursorType } from './cursor';
 import { mountNameInput } from '../hud/name-input';
+import { mountTextInput, unmountTextInput } from '../hud/text-input';
 import {
 	buildSnapCandidatesFromCorners, buildSnapCandidatesFromQuad, findSnapTarget,
 	getMarqueeQuad, getSelectionMaskSnapshot, getSnapCandidatesSnapshot,
@@ -166,6 +167,7 @@ export function handleGeometryInteraction(world: World, event: DispatchedPointer
 	const editor = getDocumentEditor(world);
 
 	if (event.type === 'dragstart' && event.target.kind === 'entity') {
+		unmountTextInput(world);
 		editor.select(event.target.id, { extend: keys(world).has('shift') });
 		handleMaskInteraction(world, event);
 	}
@@ -175,10 +177,16 @@ export function handleGeometryInteraction(world: World, event: DispatchedPointer
 	}
 
 	// Double-click drills into a container: its children become the things the
-	// canvas can hit, and the one under the pointer takes the selection.
+	// canvas can hit, and the one under the pointer takes the selection. With
+	// nothing to drill into, a text node opens its content for editing instead.
 	if (event.type === 'dblclick' && event.target.kind === 'entity') {
 		const child = enterEntity(world, event.target.id, { x: event.clientX, y: event.clientY });
-		if (child !== null) editor.select(child);
+		if (child !== null) {
+			editor.select(child);
+		} else if (isText(event.target.id)) {
+			editor.select(event.target.id);
+			mountTextInput(world, event.target.id);
+		}
 	}
 
 	if (world.get(Pointer)!.phase === 'lifted') {
@@ -194,6 +202,7 @@ export function handleCanvasInteraction(world: World, event: DispatchedPointerEv
 	const editor = getDocumentEditor(world);
 
 	if (event.type === 'dragstart') {
+		unmountTextInput(world);
 		world.set(Hud, { mode: 'marquee' });
 	}
 
@@ -280,6 +289,7 @@ export function handleLabelInteraction(world: World, event: DispatchedPointerEve
 	}
 
 	if (event.type === 'dblclick') {
+		unmountTextInput(world);
 		mountNameInput(world, entity);
 	}
 
@@ -639,16 +649,19 @@ export function handleMaskInteraction(world: World, event: DispatchedPointerEven
 	const editor = getDocumentEditor(world);
 
 	// Double-clicking a selected container drills into it, same as on the
-	// entity itself; the mask covers the node, so this is where it lands.
+	// entity itself; the mask covers the node, so this is where it lands. With
+	// nothing to drill into, a text node opens its content for editing instead.
 	if (event.type === 'dblclick') {
 		const selection = getSelection(world);
 		if (selection.length !== 1) return;
 		const child = enterEntity(world, selection[0]!, { x: event.clientX, y: event.clientY });
 		if (child !== null) editor.select(child);
+		else if (isText(selection[0]!)) mountTextInput(world, selection[0]!);
 		return;
 	}
 
 	if (event.type === 'dragstart') {
+		unmountTextInput(world);
 		snapshotSelectionMask(world);
 		snapshotSelectionTransforms(world);
 		snapshotSnapCandidates(world);

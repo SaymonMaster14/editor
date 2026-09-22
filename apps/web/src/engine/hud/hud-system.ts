@@ -6,7 +6,7 @@ import { Not, Or } from 'koota';
 import {
 	Active, Computed, Culled, FrameRate, Geometry, Group, Hidden,
 	HitRegions, Hovering, Name, Playback, RenderSurface, Root, Selected,
-	Sequential, ChildOf,
+	Sequential, TextStyle, ChildOf,
 	entityQuad, entityWorldMat, getMaskSelection, getSelectionMask, getSourceFailure,
 	invert2D, isGenerating,
 	multiply2D, rectToQuad, rotate2D, scale2D, store, transformPoint,
@@ -20,6 +20,7 @@ import {
 } from '../input/interactions';
 import { getMarqueeQuad } from '../input/snapping';
 import { getMountedNameInput } from './name-input';
+import { getMountedTextInput, unmountTextInput } from './text-input';
 
 import type { Entity, World } from 'koota';
 import type { Mat2D } from '@diffusionstudio/runtime';
@@ -56,6 +57,7 @@ export function hudSystem(world: World): void {
 	}
 
 	drawMarquee(world, ctx, resolution);
+	placeTextInput(world, resolution);
 }
 
 function drawSnapLines(world: World, ctx: Ctx2D, resolution: number): void {
@@ -403,6 +405,48 @@ function drawMarquee(world: World, ctx: Ctx2D, resolution: number): void {
 	ctx.strokeStyle = ACCENT;
 	ctx.lineWidth = Math.round(resolution);
 	ctx.stroke();
+}
+
+/**
+ * The canvas text field over the node being edited: a DOM element like the
+ * rename field, placed on the node's box in CSS pixels and turned to match
+ * it. Its typeface follows the node's, scaled by the on-screen size of the
+ * box, with a floor so small zoomed-out titles stay editable. A node deleted
+ * mid-edit closes the field instead of stranding it.
+ */
+function placeTextInput(world: World, resolution: number): void {
+	const editing = getMountedTextInput();
+	if (!editing) return;
+	if (!editing.entity.isAlive()) {
+		unmountTextInput(world);
+		return;
+	}
+
+	const quad = [...entityQuad(world, editing.entity)];
+	const xs = quad.map((point) => point.x);
+	const ys = quad.map((point) => point.y);
+	const left = Math.min(...xs) / resolution;
+	const top = Math.min(...ys) / resolution;
+	const width = Math.max((Math.max(...xs) - Math.min(...xs)) / resolution, 40);
+	const height = Math.max((Math.max(...ys) - Math.min(...ys)) / resolution, 20);
+
+	const edge = [...quad]
+		.sort((a, b) => a.y - b.y)
+		.slice(0, 2)
+		.sort((a, b) => a.x - b.x);
+	const rotation = Math.atan2(edge[1]!.y - edge[0]!.y, edge[1]!.x - edge[0]!.x) * 180 / Math.PI;
+
+	const documentWidth = store(world, Computed).width[editing.entity.id()] ?? 0;
+	const scale = documentWidth > 0 ? width / documentWidth : 1;
+	const fontSize = Math.max((editing.entity.get(TextStyle)?.fontSize ?? 16) * scale, 11);
+
+	editing.input.style.left = `${left}px`;
+	editing.input.style.top = `${top}px`;
+	editing.input.style.width = `${width}px`;
+	editing.input.style.height = `${height}px`;
+	editing.input.style.transform = `rotate(${rotation}deg)`;
+	editing.input.style.fontSize = `${fontSize}px`;
+	editing.input.style.lineHeight = `${fontSize * 1.2}px`;
 }
 
 function traceQuad(ctx: Ctx2D, quad: ReturnType<typeof entityQuad>): void {

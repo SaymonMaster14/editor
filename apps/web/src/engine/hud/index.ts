@@ -4,3 +4,4 @@
 
 export * from './hud-system';
 export * from './name-input';
+export * from './text-input';

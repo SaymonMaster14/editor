@@ -44,6 +44,14 @@ async function run<N extends ToolName>(name: N, input: ToolInput<N>): Promise<vo
 // non-numeric string becomes NaN, which the schema rejects with its own message.
 const numeric = (value: string): number => (value.trim() === "" ? NaN : Number(value));
 
+// A keyframe value is a number, or CSS hex on a color track: numeric-looking
+// input parses as a number, anything else passes through as a string.
+const numericOrString = (value: string): number | string => {
+  if (value.trim() === "") throw new InvalidArgumentError("expected a number or color value");
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : value;
+};
+
 /**
  * One --effect spec: `grain`, or `kind:param=value,...` — e.g.
  * `shake:amplitude=6,frequency=8`. Non-numeric values become NaN so the
@@ -206,6 +214,56 @@ program
       ...(opts.name !== undefined ? { name: opts.name } : {}),
       ...(opts.color !== undefined ? { color: opts.color } : {}),
       ...(opts.direction !== undefined ? { direction: opts.direction } : {}),
+    }),
+  );
+program
+  .command("keyframe")
+  .description(describe("keyframe"))
+  .argument("<op>", "add, remove, move, set, or list")
+  .argument("<target>", field("keyframe", "target"))
+  .argument("<property>", field("keyframe", "property"))
+  .option("--frame <n>", field("keyframe", "frame"), numeric)
+  .option("--to <n>", field("keyframe", "to"), numeric)
+  .option("--value <value>", field("keyframe", "value"), numericOrString)
+  .action((
+    op: ToolInput<"keyframe">["op"],
+    target: string,
+    property: string,
+    opts: { frame?: number; to?: number; value?: number | string },
+  ) =>
+    run("keyframe", {
+      op,
+      target,
+      property,
+      ...(opts.frame !== undefined ? { frame: opts.frame } : {}),
+      ...(opts.to !== undefined ? { to: opts.to } : {}),
+      ...(opts.value !== undefined ? { value: opts.value } : {}),
+    }),
+  );
+program
+  .command("audio")
+  .description(describe("audio_edit"))
+  .argument("<op>", "set or get")
+  .argument("<target>", field("audio_edit", "target"))
+  .option("--gain <db>", field("audio_edit", "gain"), numeric)
+  .option("--fade-in <seconds>", field("audio_edit", "fadeIn"), numeric)
+  .option("--fade-out <seconds>", field("audio_edit", "fadeOut"), numeric)
+  .option("--pan <n>", field("audio_edit", "pan"), numeric)
+  .option("--mute", "mute the node")
+  .option("--unmute", "unmute the node")
+  .action((
+    op: ToolInput<"audio_edit">["op"],
+    target: string,
+    opts: { gain?: number; fadeIn?: number; fadeOut?: number; pan?: number; mute?: boolean; unmute?: boolean },
+  ) =>
+    run("audio_edit", {
+      op,
+      target,
+      ...(opts.gain !== undefined ? { gain: opts.gain } : {}),
+      ...(opts.fadeIn !== undefined ? { fadeIn: opts.fadeIn } : {}),
+      ...(opts.fadeOut !== undefined ? { fadeOut: opts.fadeOut } : {}),
+      ...(opts.pan !== undefined ? { pan: opts.pan } : {}),
+      ...(opts.mute ? { muted: true } : opts.unmute ? { muted: false } : {}),
     }),
   );
 program

@@ -10,6 +10,7 @@ import {
 	Geometry,
 	Group,
 	Hidden,
+	Keyframe,
 	Position,
 	Root,
 	Selected,
@@ -37,6 +38,7 @@ import { zoomBy, zoomTo, zoomToFit, zoomToSelection } from '../camera';
 import { getDocumentEditor } from '../editor';
 import { groupSelection, ungroupSelection, unwrapSequenceSelection, wrapSelectionInScene, wrapSelectionInSequence } from '../group';
 import { getEditHistory } from '../history';
+import { deleteKeyframe } from '../keyframes';
 import { insertEdit, markIn, markOut, overwriteEdit } from '../source-edit';
 import { addMarker, seekMarker } from '../markers';
 import { splitAtPlayhead } from '../split';
@@ -89,10 +91,16 @@ export function seekPrevMarker(world: World): void {
 
 export function deleteSelection(world: World): void {
 	const selected = [...world.query(Selected)];
+	if (!selected.length) return;
 
-	if (selected.length) {
-		getDocumentEditor(world).remove(selected);
-	}
+	const editor = getDocumentEditor(world);
+	// Keyframes delete through the canonical op, so a track goes with its
+	// last keyframe instead of lingering empty in the file; everything else
+	// removes as it always has.
+	const keyframes = selected.filter((entity) => entity.has(Keyframe));
+	const rest = selected.filter((entity) => !entity.has(Keyframe));
+	for (const keyframe of keyframes) deleteKeyframe(editor, keyframe);
+	if (rest.length) editor.remove(rest);
 };
 
 export function duplicateSelection(world: World): void {

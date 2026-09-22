@@ -11,6 +11,11 @@
  * `removeKeyframeTrack` in that vocabulary, routed through the editor so the
  * file hears about them. Properties are named as the JSX names them
  * (`AnimatableProperty`), the way a track in the file is.
+ *
+ * `moveKeyframe`/`setKeyframeValue`/`deleteKeyframe` are the canonical
+ * corrections: the timeline drag, the inspector's keyframe panel, the Delete
+ * key, and the keyframe DAPI tool all funnel through them, so one semantic
+ * (clamp, occupied-frame refusal, empty-track cleanup) holds everywhere.
  */
 
 import { Keyframe as KeyframeElement, KeyframeTrack as KeyframeTrackElement, trackPropertyPath } from "@diffusionstudio/reconciler";
@@ -24,6 +29,7 @@ import {
   findKeyframeTargetNode,
   framesToSeconds,
   getNodeLocalFrame,
+  getParentEntity,
   getPropertyPaths,
 } from "@diffusionstudio/runtime";
 
@@ -120,8 +126,7 @@ export function toggleKeyframe(world: World, editor: DocumentEditor, target: Ent
     return;
   }
 
-  const last = (track.get(Cache)?.keyframes.length ?? 0) <= 1;
-  editor.remove(last ? track : existing);
+  deleteKeyframe(editor, existing);
 }
 
 /**
@@ -140,4 +145,49 @@ export function syncKeyframe(world: World, editor: DocumentEditor, target: Entit
 export function removeKeyframeTrack(world: World, editor: DocumentEditor, target: Entity, property: AnimatableProperty): void {
   const track = findKeyframeTrack(world, target, property);
   if (track) editor.remove(track);
+}
+
+/**
+ * Moves `keyframe` to clip-local `frame` (the time its track is authored in,
+ * which is what makes it travel with its clip). The frame is clamped at zero
+ * and rounded; a frame another keyframe of the track already holds is refused
+ * rather than doubled up, the way markers refuse an occupied frame. Returns
+ * whether the keyframe moved.
+ */
+export function moveKeyframe(world: World, editor: DocumentEditor, keyframe: Entity, frame: number): boolean {
+  if (!keyframe.isAlive() || !keyframe.has(Keyframe)) return false;
+  const target = Math.max(0, Math.round(frame));
+  if (Math.round(keyframe.get(Keyframe)!.time) === target) return true;
+
+  const track = getParentEntity(keyframe);
+  if (track?.has(KeyframeTrack)) {
+    const occupant = findKeyframeAt(track, target);
+    if (occupant !== null && occupant !== keyframe) return false;
+  }
+
+  editor.editProperty(keyframe, "time", keyframeTime(world, target));
+  return true;
+}
+
+/**
+ * Sets what `keyframe` holds: the corrected value a human types into the
+ * inspector, or an agent's adjustment. The track's property decides the
+ * spelling (numbers, or CSS hex on a color track).
+ */
+export function setKeyframeValue(editor: DocumentEditor, keyframe: Entity, value: number | string): boolean {
+  if (!keyframe.isAlive() || !keyframe.has(Keyframe)) return false;
+  editor.editProperty(keyframe, "value", value);
+  return true;
+}
+
+/**
+ * Removes `keyframe`; the track goes with its last keyframe, so the file is
+ * never left holding an empty `<keyframeTrack>`.
+ */
+export function deleteKeyframe(editor: DocumentEditor, keyframe: Entity): boolean {
+  if (!keyframe.isAlive() || !keyframe.has(Keyframe)) return false;
+  const track = getParentEntity(keyframe);
+  const last = track?.has(KeyframeTrack) ? (track.get(Cache)?.keyframes.length ?? 0) <= 1 : false;
+  editor.remove(last && track ? track : keyframe);
+  return true;
 }

@@ -11,14 +11,12 @@ import { Keyframe } from "@/components/ui/keyframe";
 import { useVolumeMeter, type ChannelLevels } from "@/hooks/use-volume-meter";
 import { cx } from "@/lib/cva";
 import { useHas, useTrait, useWorld } from "@diffusionstudio/koota-solid";
-import { AudioBusHandle, Computed, Muted, Soloed } from "@diffusionstudio/runtime";
+import { AudioBusHandle, Computed, Fade, Muted, Pan, Soloed } from "@diffusionstudio/runtime";
 import { useDerived, useEditor } from "@/engine/hooks";
-import { syncKeyframe } from "@/engine/keyframes";
+import { MAX_DB, MIN_DB, setFadeIn, setFadeOut, setGain, setMuted, setPan } from "@/engine/audio";
 
 import type { Entity } from "koota";
 
-const MIN_DB = -60;
-const MAX_DB = 12;
 const KNOB_MAX_ANGLE = 135;
 const METER_MAX_DB = 3;
 const METER_GREEN_END = 60;
@@ -246,11 +244,13 @@ type AudioSettingsProps = {
 };
 
 /**
- * The node's audio: its gain in decibels, mute and solo, and the live level
- * of its bus. `volume` and `muted` are props (0 dB is unity, so a volume
- * left there is unset); solo is the runtime's own tag with no JSX spelling,
- * written to the trait alone and gone on the next recompile, which is what a
- * monitoring toggle should be.
+ * The node's audio: its gain in decibels, head/tail fades in seconds, stereo
+ * pan, mute and solo, and the live level of its bus. `volume`, `muted`,
+ * `fadeIn`, `fadeOut` and `pan` are props (a value left at its default is
+ * unset); solo is the runtime's own tag with no JSX spelling, written to the
+ * trait alone and gone on the next recompile, which is what a monitoring
+ * toggle should be. Pan is keyframeable, so its row carries the diamond the
+ * volume row carries.
  */
 export function AudioSettings(props: AudioSettingsProps) {
   const world = useWorld();
@@ -262,12 +262,14 @@ export function AudioSettings(props: AudioSettingsProps) {
   const volume = useDerived(() => entity().get(Computed)?.volume ?? 0);
   const muted = useHas(entity, Muted);
   const soloed = useHas(entity, Soloed);
+  const fade = useTrait(entity, Fade);
+  const pan = useTrait(entity, Pan);
   // The bus is spun up by the playback system once the node has audio, and
   // set back to null when its decoders are released.
   const audioBus = useTrait(entity, AudioBusHandle);
 
   const toggleMuted = () => {
-    editor.editProperty(entity(), "muted", !muted());
+    setMuted(editor, entity(), !muted());
   };
 
   const toggleSoloed = () => {
@@ -288,11 +290,22 @@ export function AudioSettings(props: AudioSettingsProps) {
 
   const handleVolumeChange = (value: number | undefined) => {
     if (value === undefined) return;
-    // Whole decibels: the field and the knob both show the value rounded,
-    // and a dragged knob would otherwise write a new fraction per frame.
-    const next = Math.round(normalizeDb(value));
-    editor.editProperty(entity(), "volume", next === 0 ? false : next);
-    syncKeyframe(world, editor, entity(), "volume", next);
+    setGain(world, editor, entity(), value);
+  };
+
+  const handleFadeInChange = (value: number | undefined) => {
+    if (value === undefined) return;
+    setFadeIn(editor, entity(), value);
+  };
+
+  const handleFadeOutChange = (value: number | undefined) => {
+    if (value === undefined) return;
+    setFadeOut(editor, entity(), value);
+  };
+
+  const handlePanChange = (value: number | undefined) => {
+    if (value === undefined) return;
+    setPan(world, editor, entity(), value);
   };
 
   return (
@@ -362,6 +375,37 @@ export function AudioSettings(props: AudioSettingsProps) {
             onVolumeChange={handleVolumeChange}
           />
         </div>
+      </ControlRow>
+      <ControlRow label="Fades" contentClass="grid grid-cols-2 gap-2">
+        <ControlledTextField
+          value={fade()?.in ?? 0}
+          onNumber={handleFadeInChange}
+          min={0}
+          step={0.1}
+          unit="s"
+          autoSelect
+        />
+        <ControlledTextField
+          value={fade()?.out ?? 0}
+          onNumber={handleFadeOutChange}
+          min={0}
+          step={0.1}
+          unit="s"
+          autoSelect
+        />
+      </ControlRow>
+      <ControlRow label="Pan">
+        <ControlledTextField
+          value={pan()?.value ?? 0}
+          onNumber={handlePanChange}
+          min={-1}
+          max={1}
+          step={0.1}
+          sliderEnabled
+          showSign
+          autoSelect
+          keyframe={<Keyframe target={entity()} property="pan" />}
+        />
       </ControlRow>
       <Show when={audioBus()}>
         <ControlRow label="" class="my-3">
