@@ -149,7 +149,9 @@ function handleTrim(
 	// A container that takes its bounds from its children has no edge of its
 	// own to take hold of — moving one would be moving a child. One that
 	// authors its own end does, and is trimmed like any other clip.
+	// The razor never trims: its presses belong to the cut, not the edge.
 	if (fitsChildren(entity)) return;
+	if (world.get(Tool)?.value === ToolType.BLADE) return;
 
 	const pointer = surface.pointer!;
 	const handle = Math.min(Math.max(width / 3, 3), width / 2, TRIM_HANDLE_WIDTH);
