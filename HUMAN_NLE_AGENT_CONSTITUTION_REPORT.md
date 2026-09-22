@@ -44,7 +44,8 @@
   (permission milestone below; muse file tools proven ungated, see
   Limitations).
 - Production integrity / native-first enforcement: no editability validator;
-  `check` validates project state, not native-vs-flattened representation.
+  `check` validates project state, not native-vs-flattened representation. — DONE
+  (integrity milestone below; live-agent cheating observation still pending).
 - Architecture checks: no `check:architecture`, no exceptions file.
 
 ## Plan (milestones)
@@ -281,6 +282,45 @@ Commit `c4f4726`, pushed to `fork/diffusion-on-steroids`.
   be used from within OpenCode" (environmental gate; earlier run
   also showed premiere-pro MCP sprawl at 128 tools).
 
+## Milestone: native-first production integrity (plan §9)
+
+Commit `8ede877`, pushed to `fork/diffusion-on-steroids`.
+
+- `packages/assets/src/escalation.ts` (new): `ExternalEscalation`
+  receipts (`tool`, `reason`, `scope` element/scene/footage,
+  `missingCapability?`, `createdAt`) stored on the asset record, so the
+  manifest round-trips them with no migration and no second database.
+  `record-escalation` refuses transient bytes ("import first") and blank
+  fields; a second receipt replaces the standing one, loudly.
+- Pure verdict core `packages/dapi/src/production-integrity.ts` (no
+  world, no fs): 8 asset roles (escalated/generated/imported/linked are
+  attributed; project-local/transient/remote/unknown are not), union
+  video-coverage math, one video asset covering ≥ 80% of the played
+  window dominates. `flattened-scene` errors only on the full
+  conjunction (dominant + unattributed + zero editable structure);
+  `flattened-program` errors when a one-scene program is one flattened
+  render; lone linked files warn (`linked-solo`, declare as footage to
+  silence). Dominance alone never flags; groups/sequences don't count
+  as structure (a wrapper around one clip is not a composition).
+- `production_integrity` DAPI tool (op-dispatched `check` /
+  `record-escalation`, cataloged next to `check`/`qa_sweep` — same QA
+  family, not a second system) + renderer handler reusing `check.ts`
+  visibility semantics + `production-integrity` CLI command. Check
+  output is the structural receipt: per-scene nodes/byKind,
+  editableNodes, animatedProperties, masks, dominant asset + role +
+  coverage, issues; scene-targeted or whole-program.
+- Native-first execution hierarchy + completion gate
+  (`check`/`capture`/`production_integrity` with zero errors) added to
+  the shared `chatInstructions` preamble every harness appends.
+- Tests: 16 core + 4 schema (dapi 102/102). E2E 24/24 ALL PASS on a
+  fresh live stack (`tmp/integrity-e2e/proof.mjs`): synthetic cheat
+  fails with both error codes at role project-local/coverage 1.0;
+  declare-to-pass loop, assets.yml receipt persistence, and reopen
+  roundtrips; structure exempts the dominant clip; seeded linked file
+  warns, footage declaration silences; wrong-kind/missing-node/blank/
+  ghost-asset error cases. Repo-wide `npm run check` clean, handler
+  lint clean.
+
 ## Fire tests
 
 NLE E2E (agent path over DAPI/CLI): 27/27 green, see milestone above.
@@ -299,9 +339,12 @@ drive a scene selection from CLI).
 Filesystem fire test (§58–§59): live 4-harness matrix above — codex
 enforcement proven, muse shell-only enforcement proven with file
 tools honestly marked unenforceable, claude/opencode environmentally
-blocked (no credit / free-tier gate). Human→agent, cheating, and
-monolith fire tests still pending (plan §11). Evidence artifacts
-stay under `tmp/` (now gitignored: kept on disk, never committed).
+blocked (no credit / free-tier gate). Integrity fire test (§56–§57):
+the validator is proven against synthetic cheats (E2E 24/24), but no
+live agent has yet been observed against the tempting task — that
+observation, plus human→agent and monolith fire tests, still pending
+(plan §11). Evidence artifacts stay under `tmp/` (now gitignored:
+kept on disk, never committed).
 
 ## Performance
 
@@ -342,6 +385,14 @@ incl. notification-only + choiceless-listPending paths, opencode,
 registry) with `tsc --noEmit` clean; NLE/source/marker/correction
 E2E proofs untouched by this slice (agent-chat-only changes plus the
 access-menu UI) and not re-run.
+
+Integrity-milestone gate at `8ede877`: `npm run check` clean (all
+workspaces); dapi 102/102 (16 integrity core + 4 tool schema),
+agent-chat 132/132, assets 91/91, cli 15/15; new-handler eslint
+clean; integrity E2E 24/24 ALL PASS on a fresh live stack (prior
+stack predated the tool, so it was stopped and relaunched — catalog
+bakes at boot). Earlier E2E proofs untouched by this slice and not
+re-run.
 
 ## Limitations
 
@@ -404,10 +455,19 @@ access-menu UI) and not re-run.
   usage-limit on the final re-run (earlier full run green).
 - `tmp/` E2E evidence is now gitignored: artifacts stay on this disk
   for audit but never enter the repo (large binaries included).
+- Production integrity raises the bar, it does not make cheating
+  impossible: a fig-leaf visible text node over a flattened render
+  passes the error (the receipt still shows one dominant unattributed
+  asset and exactly 1 editable node — inspectable, not silent);
+  still-image scenes never trigger (video/sequence dominance only);
+  the 80% threshold is a named constant, not a derived law; and the
+  `linked` role trusts absolute outside paths, which a full-machine
+  agent could also write to — project-scoped agents cannot, which is
+  where the two systems reinforce each other.
 
 ## Final SHA
 
-Pending — goal continues. Interim HEAD: `c4f4726`
-(`fork/diffusion-on-steroids`), permission slice complete (plan §8).
-Remaining: native-first/production integrity (§9), architecture
-constitution (§10), remaining fire tests (§11), packaging (§12).
+Pending — goal continues. Interim HEAD: `8ede877`
+(`fork/diffusion-on-steroids`), integrity slice complete (plan §9).
+Remaining: architecture constitution (§10), remaining fire tests
+(§11), packaging (§12).
