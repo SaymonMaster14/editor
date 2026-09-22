@@ -37,8 +37,7 @@ import {
 } from '@/components/ui/context-menu';
 import { Tooltip, TooltipContent, TooltipPortal, TooltipTrigger } from '@/components/ui/tooltip';
 import { useEditor } from '@/engine/hooks';
-import { liftSelection, rippleDeleteSelection } from '@/engine/nle-actions';
-import { splitAtPlayhead } from '@/engine/split';
+import { liftSelection, rippleDeleteSelection, splitSelectionAtPlayhead } from '@/engine/nle-actions';
 import { DEFAULT_CLIP_HEIGHT, MAX_CLIP_HEIGHT, MIN_CLIP_HEIGHT, getClipFallbackName } from '@/engine/timeline';
 import { NESTED_INDENT_PX } from './config';
 import { useLayout } from '@/context/layout';
@@ -189,7 +188,7 @@ export function NodeLayer(props: LayerRowProps) {
   };
 
   const handleRemove = () => editor.remove(entity());
-  const handleSplitAtPlayhead = () => splitAtPlayhead(world);
+  const handleSplitAtPlayhead = () => splitSelectionAtPlayhead(world);
   const handleLift = () => liftSelection(world);
   const handleRippleDelete = () => rippleDeleteSelection(world);
   /**

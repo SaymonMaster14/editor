@@ -5,7 +5,7 @@
 import { Caption, CaptionType, Chars, ClipDragOrigin, Computed, Hidden, Name, Selected, Tool, ToolType, TrimDragOrigin, fitsChildren, getGeneratingColor, getSourceFailure, isCaption, isGenerating, isGroup, isText, store } from '@diffusionstudio/runtime';
 
 import { getDocumentEditor } from '../../editor';
-import { splitClipAtFrame } from '../../split';
+import { razorCutAtFrame } from '../../nle-actions';
 import { assert } from '@/utils';
 import {
 	CLIP_BREAKPOINTS,
@@ -268,7 +268,7 @@ function handleBody(
 		if (clicked) {
 			assert(pointer.position, 'Pointer position must be set');
 			const frame = pixelsToFrames(pointer.position.currentX + getScrollX(world, scene) * resolution, resolution);
-			if (splitClipAtFrame(world, entity, frame) === null) editor.select(entity);
+			if (razorCutAtFrame(world, entity, frame) === null) editor.select(entity);
 		}
 		return;
 	}

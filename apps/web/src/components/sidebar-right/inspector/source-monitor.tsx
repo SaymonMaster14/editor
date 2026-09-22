@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { formatDuration } from "@/utils/formatters";
 import { useLibrary } from "@/engine/library";
+import { getEditHistory } from "@/engine/history";
 import {
   DEFAULT_STILL_SECONDS,
   insertEdit,
@@ -69,12 +70,14 @@ export function SourceMonitorPanel(props: { asset: Asset }) {
   };
 
   const handleInsert = () => {
+    getEditHistory(world).labelStep('Insert');
     if (!insertEdit(world)) {
       toast("Nothing to insert into", { description: "Open a project first." });
     }
   };
 
   const handleOverwrite = () => {
+    getEditHistory(world).labelStep('Overwrite');
     if (!overwriteEdit(world)) {
       toast("Nothing to overwrite into", { description: "Open a project first." });
     }

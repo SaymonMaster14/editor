@@ -6,6 +6,7 @@ import { Fade, Muted, Pan, Volume } from "@diffusionstudio/runtime";
 import { DapiError } from "@diffusionstudio/dapi";
 import { setFadeIn, setFadeOut, setGain, setMuted, setPan } from "@/engine/audio";
 import { getDocumentEditor } from "@/engine/editor";
+import { getEditHistory } from "@/engine/history";
 import { resolveNode } from "../lib/nodes";
 
 import type { Entity } from "koota";
@@ -67,7 +68,8 @@ export const audioEdit: ToolHandler<"audio_edit"> = async (
   if (!wrote.length) {
     throw new DapiError("invalid-input", "set needs at least one of gain, fadeIn, fadeOut, pan, muted.");
   }
-
+  // Past the guard edits really happened, so the open step is this one's to name.
+  getEditHistory(world).labelStep("Agent — audio edit");
   return {
     op,
     summary: `set ${target}'s ${wrote.join(", ")}`,

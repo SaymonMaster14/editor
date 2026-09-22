@@ -24,17 +24,33 @@ import {
 } from '@diffusionstudio/runtime';
 
 import { clipSpan, extract, lift, rippleTrimOut, rippleTrimPreviousToPlayhead, siblingsInTime, slide, slip, type RippleReport } from './nle';
+import { splitAtPlayhead, splitClipAtFrame } from './split';
+import { getEditHistory } from './history';
 
 import type { Entity, World } from 'koota';
 
 /** Removes the selection and leaves the gap: Premiere's lift. */
 export function liftSelection(world: World): Entity[] {
+	getEditHistory(world).labelStep('Lift');
 	return lift(world, getSelection(world));
 }
 
 /** Removes the selection and closes the gap: Premiere's ripple delete. */
 export function rippleDeleteSelection(world: World): RippleReport {
+	getEditHistory(world).labelStep('Ripple delete');
 	return extract(world, getSelection(world));
+}
+
+/** Cuts the selection (or everything under the playhead) in two: ⌘B. */
+export function splitSelectionAtPlayhead(world: World): Entity[] {
+	getEditHistory(world).labelStep('Split at playhead');
+	return splitAtPlayhead(world);
+}
+
+/** The razor's cut at an arbitrary frame: C, then click. */
+export function razorCutAtFrame(world: World, entity: Entity, frame: number): Entity | null {
+	getEditHistory(world).labelStep('Razor cut');
+	return splitClipAtFrame(world, entity, frame);
 }
 
 /**
@@ -82,6 +98,7 @@ export function rippleTrimPrevToPlayhead(world: World): number {
 
 	let applied = 0;
 	for (const clip of clipsUnderPlayhead(scene, frame)) {
+		getEditHistory(world).labelStep('Ripple trim previous');
 		applied += Math.abs(rippleTrimPreviousToPlayhead(world, clip, frame));
 	}
 	return applied;
@@ -99,6 +116,7 @@ export function rippleTrimNextToPlayhead(world: World): number {
 
 	let applied = 0;
 	for (const clip of clipsUnderPlayhead(scene, frame)) {
+		getEditHistory(world).labelStep('Ripple trim next');
 		applied += Math.abs(rippleTrimOut(world, clip, frame));
 	}
 	return applied;
@@ -107,13 +125,19 @@ export function rippleTrimNextToPlayhead(world: World): number {
 /** Slips the selection's source windows by `delta` frames; the timeline does not move. */
 export function slipSelectionBy(world: World, delta: number): number {
 	let applied = 0;
-	for (const entity of getSelection(world)) applied += slip(world, entity, delta);
+	for (const entity of getSelection(world)) {
+		getEditHistory(world).labelStep('Slip');
+		applied += slip(world, entity, delta);
+	}
 	return applied;
 }
 
 /** Slides the selection along the timeline by `delta` frames. */
 export function slideSelectionBy(world: World, delta: number): number {
 	let applied = 0;
-	for (const entity of getSelection(world)) applied += slide(world, entity, delta);
+	for (const entity of getSelection(world)) {
+		getEditHistory(world).labelStep('Slide');
+		applied += slide(world, entity, delta);
+	}
 	return applied;
 }

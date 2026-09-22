@@ -41,8 +41,7 @@ import { getEditHistory } from '../history';
 import { deleteKeyframe } from '../keyframes';
 import { insertEdit, markIn, markOut, overwriteEdit } from '../source-edit';
 import { addMarker, seekMarker } from '../markers';
-import { rippleDeleteSelection, rippleTrimNextToPlayhead, rippleTrimPrevToPlayhead, slideSelectionBy, slipSelectionBy } from '../nle-actions';
-import { splitAtPlayhead } from '../split';
+import { rippleDeleteSelection, rippleTrimNextToPlayhead, rippleTrimPrevToPlayhead, slideSelectionBy, slipSelectionBy, splitSelectionAtPlayhead } from '../nle-actions';
 import { Keys, MODIFIER_KEYS, Pointer } from '../traits';
 import { editTransform } from './interactions';
 
@@ -67,6 +66,7 @@ export function redoEdit(world: World): void {
 }
 /** Lands the monitor’s marked range at the playhead, rippling later clips aside (`,`). */
 export function insertMonitorRange(world: World): void {
+	getEditHistory(world).labelStep('Insert');
 	insertEdit(world);
 }
 
@@ -107,6 +107,7 @@ export function slipRight(world: World): void {
 
 /** Lands the monitor’s marked range at the playhead where covered siblings give way (`.`). */
 export function overwriteMonitorRange(world: World): void {
+	getEditHistory(world).labelStep('Overwrite');
 	overwriteEdit(world);
 }
 
@@ -525,8 +526,7 @@ const PRESSED_SHORTCUTS: readonly Shortcut[] = [
 	{ keys: ['enter', 'mod', '!shift', '!alt'], action: wrapSelectionInScene },
 	{ keys: ['enter', 'mod', 'alt', '!shift'], action: wrapSelectionInSequence },
 	{ keys: ['enter', 'mod', 'alt', 'shift'], action: unwrapSequenceSelection },
-	{ keys: ['b', 'mod'], action: splitAtPlayhead },
-	{ keys: ['c', 'mod'], action: copySelection },
+	{ keys: ['b', 'mod'], action: splitSelectionAtPlayhead },
 	{ keys: ['v', 'mod'], action: pasteSelection },
 	{ keys: ['x', 'mod'], action: cutSelection },
 	{ keys: ['h', 'mod', 'shift'], action: toggleSelectionHidden },

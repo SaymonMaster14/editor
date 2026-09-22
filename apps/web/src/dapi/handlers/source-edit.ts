@@ -6,6 +6,7 @@ import { Library, Name, Source } from "@diffusionstudio/runtime";
 import { DapiError } from "@diffusionstudio/dapi";
 import { isPendingSource } from "@/engine/editor";
 import { clipSpan } from "@/engine/nle";
+import { getEditHistory } from "@/engine/history";
 import {
   insertEdit,
   loadSourceMonitor,
@@ -101,6 +102,7 @@ export const sourceEdit: ToolHandler<"source_edit"> = async (
     ...(frame !== undefined ? { at: frame } : {}),
     ...(parentEntity ? { parent: parentEntity } : {}),
   };
+  getEditHistory(world).labelStep(`Agent — ${op}`);
   const report = op === "insert" ? insertEdit(world, options) : overwriteEdit(world, options);
   if (!report) {
     throw new DapiError(

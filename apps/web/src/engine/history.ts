@@ -132,6 +132,8 @@ interface Transaction {
 	gesture: boolean;
 	committedAt: number;
 	broken?: boolean;
+	/** What caused the step, when the actor said so (`labelStep`): "Razor cut", "Agent — split". Unlabeled steps describe their ops instead. */
+	label?: string;
 }
 
 export class EditHistory {
@@ -147,6 +149,8 @@ export class EditHistory {
 	private gesture = false;
 	private scheduled = false;
 	private applying = false;
+	/** A label waiting for the next step (`labelStep` before the edits). Cleared once a step opens. */
+	private pendingLabel: string | null = null;
 
 	/** Bumped on every change, so the menu's disabled states stay honest. */
 	private readonly changed: () => void;
@@ -176,6 +180,40 @@ export class EditHistory {
 	}
 
 	/**
+	 * Names the step about to happen: call immediately before the edits, so
+	 * the label lands on this actor's step and no other. Human verbs say
+	 * what they did ("Razor cut"); agent handlers prefix themselves
+	 * ("Agent — split"). Unlabeled steps describe their ops instead.
+	 *
+	 * Unused labels evaporate on the microtask: a no-op press (razor at a
+	 * clip edge, split with nothing under the playhead) must not name the
+	 * next unrelated step. Label-then-edit sequences are synchronous, so a
+	 * real step always opens before the cleanup runs.
+	 */
+	public labelStep(label: string): void {
+		if (this.open) {
+			this.open.label = label;
+			return;
+		}
+		this.pendingLabel = label;
+		queueMicrotask(() => {
+			if (this.pendingLabel === label) this.pendingLabel = null;
+		});
+	}
+
+	/** Display labels for the undo stack, oldest first. Reactive. */
+	public undoLabels(): string[] {
+		this.version();
+		return this.undos.map((transaction) => transaction.label ?? describeOps(transaction.ops));
+	}
+
+	/** Display labels for the redo stack, oldest first. Reactive. */
+	public redoLabels(): string[] {
+		this.version();
+		return this.redos.map((transaction) => transaction.label ?? describeOps(transaction.ops));
+	}
+
+	/**
 	 * Starts over, for a fresh mount: what was recorded against the previous
 	 * document cannot be replayed against this one.
 	 */
@@ -184,6 +222,7 @@ export class EditHistory {
 		this.redos = [];
 		this.open = null;
 		this.gesture = false;
+		this.pendingLabel = null;
 		this.changed();
 	}
 
@@ -353,16 +392,10 @@ export class EditHistory {
 			}
 		}
 	}
-
-	/**
-	 * The transaction edits are landing in, opened on the first of them. A
-	 * burst outside a gesture commits on the microtask, so everything one
-	 * event handler did — a shortcut over a whole selection, a compound
-	 * command — is one step.
-	 */
 	private ensureOpen(): Transaction {
 		if (!this.open) {
-			this.open = { ops: [], gesture: this.gesture, committedAt: 0 };
+			this.open = { ops: [], gesture: this.gesture, committedAt: 0, label: this.pendingLabel ?? undefined };
+			this.pendingLabel = null;
 			this.changed();
 		}
 		if (!this.gesture && !this.scheduled) {
@@ -595,6 +628,24 @@ export class EditHistory {
 			if (entity.isAlive() && entity.get(Source)!.value === source) return entity;
 		}
 		return undefined;
+	}
+}
+
+/**
+ * A human label for an unlabeled step, from its first op: what went into
+ * the file, in product words. Steps whose actor said nothing still read
+ * as something done, not as internals.
+ */
+function describeOps(ops: HistoryOp[]): string {
+	const first = ops[0];
+	if (!first) return 'Edit';
+	switch (first.kind) {
+		case 'insert': return `Add ${first.node.tag}`;
+		case 'remove': return 'Delete element';
+		case 'move': return 'Move element';
+		case 'prop': return `Edit ${first.name}`;
+		case 'text': return 'Edit text';
+		case 'variable': return 'Edit setting';
 	}
 }
 

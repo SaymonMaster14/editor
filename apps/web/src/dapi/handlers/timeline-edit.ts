@@ -54,6 +54,7 @@ export const timelineEdit: ToolHandler<"timeline_edit"> = async ({ op, target, f
     };
   }
 
+  getEditHistory(world).labelStep(`Agent — ${op}`);
   switch (op) {
     case "split": {
       let at = frame;

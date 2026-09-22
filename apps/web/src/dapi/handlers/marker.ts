@@ -12,6 +12,7 @@ import {
   removeMarker,
   seekMarker,
 } from "@/engine/markers";
+import { getEditHistory } from "@/engine/history";
 
 import type { SceneMarker } from "@diffusionstudio/runtime";
 import type { World } from "koota";
@@ -48,6 +49,7 @@ export const marker: ToolHandler<"marker"> = async (
   }
 
   if (op === "add") {
+    getEditHistory(world).labelStep("Agent — add marker");
     const added = addMarker(world, {
       ...(at !== undefined ? { at: frames(at) } : {}),
       ...(name !== undefined ? { name } : {}),
@@ -65,6 +67,7 @@ export const marker: ToolHandler<"marker"> = async (
 
   if (op === "remove") {
     const target = at !== undefined ? frames(at) : undefined;
+    getEditHistory(world).labelStep("Agent — remove marker");
     if (!removeMarker(world, target === undefined ? {} : { at: target })) {
       throw new DapiError(
         "not-found",
@@ -80,6 +83,7 @@ export const marker: ToolHandler<"marker"> = async (
     if (from === undefined || to === undefined) {
       throw new DapiError("invalid-input", "move needs from and to (the flag's position and where it goes).");
     }
+    getEditHistory(world).labelStep("Agent — move marker");
     const source = frames(from);
     const destination = frames(to);
     if (!moveMarker(world, { from: source, to: destination })) {
@@ -105,6 +109,8 @@ export const marker: ToolHandler<"marker"> = async (
     };
   }
 
+  // Label only when flags exist to clear: a no-op must not name the next step.
+  if (listMarkers(world).length > 0) getEditHistory(world).labelStep("Agent — clear markers");
   if (!clearMarkers(world)) {
     return { op, summary: "the scene holds no markers" };
   }

@@ -5,6 +5,7 @@
 import { Cache, FrameRate, Keyframe as KeyframeTrait, colorToHex, framesToSeconds } from "@diffusionstudio/runtime";
 import { DapiError } from "@diffusionstudio/dapi";
 import { getDocumentEditor } from "@/engine/editor";
+import { getEditHistory } from "@/engine/history";
 import {
   deleteKeyframe,
   findKeyframeAt,
@@ -67,6 +68,7 @@ export const keyframe: ToolHandler<"keyframe"> = async (
   }
 
   if (op === "add") {
+    getEditHistory(world).labelStep("Agent — add keyframe");
     const added = value === undefined
       ? writeKeyframe(world, editor, node, prop)
       : writeKeyframe(world, editor, node, prop, value);
@@ -93,6 +95,7 @@ export const keyframe: ToolHandler<"keyframe"> = async (
     if (!found) {
       throw new DapiError("not-found", `no keyframe stands at frame ${at} on ${target}'s ${property} — list the track first.`);
     }
+    getEditHistory(world).labelStep("Agent — delete keyframe");
     deleteKeyframe(editor, found);
     return { op, summary: `removed the keyframe at frame ${at} on ${target}'s ${property}` };
   }
@@ -104,6 +107,7 @@ export const keyframe: ToolHandler<"keyframe"> = async (
     if (!found) {
       throw new DapiError("not-found", `no keyframe stands at frame ${at} on ${target}'s ${property} — list the track first.`);
     }
+    getEditHistory(world).labelStep("Agent — move keyframe");
     if (!moveKeyframe(world, editor, found, to)) {
       throw new DapiError("invalid-input", `cannot move the keyframe from frame ${at} to frame ${to} — another keyframe already stands at ${to}.`);
     }
@@ -120,6 +124,7 @@ export const keyframe: ToolHandler<"keyframe"> = async (
   if (!found) {
     throw new DapiError("not-found", `no keyframe stands at frame ${at} on ${target}'s ${property} — add one first.`);
   }
+  getEditHistory(world).labelStep("Agent — set keyframe");
   setKeyframeValue(editor, found, value);
   return {
     op,

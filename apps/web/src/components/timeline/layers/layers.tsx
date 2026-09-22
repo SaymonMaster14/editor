@@ -2,7 +2,7 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-import { createEffect, createMemo, Index, onCleanup, onMount, Show } from 'solid-js';
+import { createEffect, createMemo, For, Index, onCleanup, onMount, Show } from 'solid-js';
 import { toast } from 'somoto';
 import { useTrait, useWorld } from '@diffusionstudio/koota-solid';
 import { Sequence as SequenceElement } from '@diffusionstudio/reconciler';
@@ -33,7 +33,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Tooltip, TooltipContent, TooltipPortal, TooltipTrigger } from '@/components/ui/tooltip';
 import { DEFAULT_CLIP_HEIGHT, RULER_HEIGHT } from '@/engine/timeline';
-import { splitAtPlayhead } from '@/engine/split';
+import { splitSelectionAtPlayhead } from '@/engine/nle-actions';
 import { useDerived, useEditor, useTimelineIndex } from '@/engine/hooks';
 import { useTimeline } from '@/context/timeline';
 import { getEditHistory } from '@/engine/history';
@@ -61,6 +61,14 @@ export function Layers() {
   const world = useWorld();
   const editor = useEditor();
   const history = () => getEditHistory(world);
+  /** Undoes the newest `steps` entries: jumping the History list lands here. */
+  const undoThrough = (steps: number) => {
+    for (let i = 0; i < steps; i++) history().undo();
+  };
+  /** Redoes the newest `steps` undone entries. */
+  const redoThrough = (steps: number) => {
+    for (let i = 0; i < steps; i++) history().redo();
+  };
   const timeline = useTimeline();
   const index = useTimelineIndex();
   const { timelineMinimized, toggleTimeline, timelineView, toggleTimelineView } = useLayout();
@@ -177,6 +185,56 @@ export function Layers() {
               <TooltipContent shortcut="Ctrl+Shift+Z">Redo</TooltipContent>
             </TooltipPortal>
           </Tooltip>
+          <DropdownMenu>
+            <Tooltip placement="top">
+              <TooltipTrigger<typeof DropdownMenuTrigger>
+                as={(triggerProps: object) => (
+                  <DropdownMenuTrigger<typeof Button>
+                    {...triggerProps}
+                    as={(buttonProps) => (
+                      <Button {...buttonProps} variant="ghost" size="icon">
+                        <Icon name="history" class="size-6" />
+                      </Button>
+                    )}
+                  />
+                )}
+              />
+              <TooltipPortal>
+                <TooltipContent>History</TooltipContent>
+              </TooltipPortal>
+            </Tooltip>
+            <DropdownMenuPortal>
+              <DropdownMenuContent class="w-[240px]">
+                <div class="px-2 py-1 text-xxs uppercase tracking-wide text-muted-foreground">Undo</div>
+                <Show
+                  when={history().undoLabels().length > 0}
+                  fallback={<div class="px-2 py-1 text-xs text-muted-foreground">Nothing to undo</div>}
+                >
+                  <For each={[...history().undoLabels()].reverse()}>
+                    {(label, index) => (
+                      <DropdownMenuItem onSelect={() => undoThrough(index() + 1)}>
+                        <span class="truncate">{label}</span>
+                      </DropdownMenuItem>
+                    )}
+                  </For>
+                </Show>
+                <DropdownMenuSeparator />
+                <div class="px-2 py-1 text-xxs uppercase tracking-wide text-muted-foreground">Redo</div>
+                <Show
+                  when={history().redoLabels().length > 0}
+                  fallback={<div class="px-2 py-1 text-xs text-muted-foreground">Nothing to redo</div>}
+                >
+                  <For each={[...history().redoLabels()].reverse()}>
+                    {(label, index) => (
+                      <DropdownMenuItem onSelect={() => redoThrough(index() + 1)}>
+                        <span class="truncate">{label}</span>
+                      </DropdownMenuItem>
+                    )}
+                  </For>
+                </Show>
+              </DropdownMenuContent>
+            </DropdownMenuPortal>
+          </DropdownMenu>
           <Tooltip placement="top">
             <TooltipTrigger<typeof Button>
               as={(triggerProps) => (
@@ -213,7 +271,7 @@ export function Layers() {
             <Tooltip placement="top">
               <TooltipTrigger<typeof Button>
                 as={(triggerProps) => (
-                  <Button {...triggerProps} variant="ghost" size="icon" onClick={() => splitAtPlayhead(world)}>
+                  <Button {...triggerProps} variant="ghost" size="icon" onClick={() => splitSelectionAtPlayhead(world)}>
                     <Icon name="split" class="size-6" />
                   </Button>
                 )}
