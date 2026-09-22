@@ -244,12 +244,15 @@ function handleBody(
 ): void {
 	const pointer = surface.pointer!;
 	const editor = getDocumentEditor(world);
-	const { clicked, dragging, intersectsMarquee } = pointer.region(left, 0, width, row.height);
+	const { clicked, dragging, hovering, intersectsMarquee } = pointer.region(left, 0, width, row.height);
 	const selected = entity.has(Selected);
 	// The razor only cuts: a press that travels must not start a move, and a
 	// marquee must not start from a blade gesture. A click at the very edge
 	// selects instead of cutting nothing.
 	if (world.get(Tool)?.value === ToolType.BLADE) {
+		// The timeline cursor is per-frame render state, not the stage tool
+		// cursor, so the blade claims it directly over a cut target.
+		if (hovering) surface.cursor = 'cross';
 		if (clicked) {
 			assert(pointer.position, 'Pointer position must be set');
 			const frame = pixelsToFrames(pointer.position.currentX + getScrollX(world, scene) * resolution, resolution);

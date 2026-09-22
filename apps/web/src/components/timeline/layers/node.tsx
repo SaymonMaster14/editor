@@ -78,10 +78,12 @@ export function NodeLayer(props: LayerRowProps) {
   const nleView = () => timelineView() === 'nle';
 
   /**
-   * The NLE track header, projected from the scene's own rows: audio-only
-   * rows read A1.. from the top, everything else V1.. from the bottom, the
-   * way Premiere numbers them. Nested rows carry no badge. Pure label —
-   * the hierarchy underneath is untouched.
+   * The NLE track header, projected from the scene's own rows. Rows display
+   * top-down in reverse document order, so video lanes number top-down in
+   * document order (V1 is the bottom-most video lane, next to the audio)
+   * and audio lanes bottom-up (A1 is the top-most audio lane), the way
+   * Premiere numbers them. Nested rows carry no badge. Pure label — the
+   * hierarchy underneath is untouched.
    */
   const trackBadge = createMemo(() => {
     if (props.depth !== 0) return null;
@@ -113,9 +115,9 @@ export function NodeLayer(props: LayerRowProps) {
     const kind = kinds[at]!;
     let n = 0;
     if (kind === 'V') {
-      for (let i = kinds.length - 1; i >= at; i--) if (kinds[i] === 'V') n++;
+      for (let i = 0; i <= at; i++) if (kinds[i] === 'V') n++;
     } else {
-      for (let i = 0; i <= at; i++) if (kinds[i] === 'A') n++;
+      for (let i = kinds.length - 1; i >= at; i--) if (kinds[i] === 'A') n++;
     }
     return `${kind}${n}`;
   });
